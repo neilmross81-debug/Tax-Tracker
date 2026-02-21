@@ -1,49 +1,35 @@
 /**
- * UK Tax Calculator 2025/26
- * Rules:
- * - Personal Allowance: £12,570 (Tapers by £1 for every £2 over £100k)
- * - Basic Rate (20%): £12,571 - £50,270
- * - Higher Rate (40%): £50,271 - £125,140
- * - Additional Rate (45%): > £125,140
- * - NI (Class 1 Employees): 8% up to £50,270, 2% above (Approximation using annual thresholds)
+ * UK Tax Calculator 2025/26 - Projections & Monthly Support
  */
 
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0) => {
-    // Adjusted Gross for Tax (after salary sacrifice and pension if net pay)
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
 
-    // 1. Calculate Personal Allowance
     let personalAllowance = 12570;
     if (taxableIncome > 100000) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
     }
 
-    // 2. Calculate Income Tax
     let incomeTax = 0;
     let remainingTaxable = taxableIncome - personalAllowance;
 
     if (remainingTaxable > 0) {
-        // Basic Rate
         const basicRateBand = Math.min(remainingTaxable, 50270 - 12570);
         incomeTax += basicRateBand * 0.20;
         remainingTaxable -= basicRateBand;
 
         if (remainingTaxable > 0) {
-            // Higher Rate
             const higherRateBand = Math.min(remainingTaxable, 125140 - 50270);
             incomeTax += higherRateBand * 0.40;
             remainingTaxable -= higherRateBand;
 
             if (remainingTaxable > 0) {
-                // Additional Rate
                 incomeTax += remainingTaxable * 0.45;
             }
         }
     }
 
-    // 3. Calculate National Insurance
-    // Assuming 2025/26 thresholds (Primary Threshold ~£12,570, UEL ~£50,270)
     let ni = 0;
     if (annualGross > 12570) {
         const mainBand = Math.min(annualGross, 50270) - 12570;
@@ -68,16 +54,48 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     };
 };
 
-export const getPensionAdvice = (annualGross, currentPensionPercent) => {
-    const current = calculateTax(annualGross, annualGross * (currentPensionPercent / 100));
-    const increased = calculateTax(annualGross, annualGross * ((currentPensionPercent + 1) / 100));
+/**
+ * Project Annual Income based on YTD and remaining months
+ */
+export const projectAnnual = (monthsData, currentMonthIndex) => {
+    let ytdGross = 0;
+    let ytdPension = 0;
+    let ytdSacrifice = 0;
 
-    const takeHomeDifference = current.takeHome - increased.takeHome;
-    const pensionDifference = (annualGross * 0.01); // 1% difference
+    // 1. Calculate YTD (Months up to current)
+    for (let i = 0; i <= currentMonthIndex; i++) {
+        const month = monthsData[i];
+        ytdGross += month.income.reduce((s, item) => s + Number(item.amount), 0);
+        ytdPension += month.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
+        ytdSacrifice += month.deductions.reduce((s, item) => s + (item.type !== 'pension' ? Number(item.amount) : 0), 0);
+    }
 
-    return {
-        costOfOnePercent: takeHomeDifference,
-        gainInPension: pensionDifference,
-        efficiency: (pensionDifference / takeHomeDifference).toFixed(2) // How many £ in pension for every £ lost in take-home
-    };
+    // 2. Project Remaining (Months after current)
+    // Assuming the user wants to project based on the *current* month's values for remaining
+    const remainingMonths = 11 - currentMonthIndex;
+    const currentMonth = monthsData[currentMonthIndex];
+    const monthlyGross = currentMonth.income.reduce((s, item) => s + Number(item.amount), 0);
+    const monthlyPension = currentMonth.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
+    const monthlySacrifice = currentMonth.deductions.reduce((s, item) => s + (item.type !== 'pension' ? Number(item.amount) : 0), 0);
+
+    const projectedGross = ytdGross + (monthlyGross * remainingMonths);
+    const projectedPension = ytdPension + (monthlyPension * remainingMonths);
+    const projectedSacrifice = ytdSacrifice + (monthlySacrifice * remainingMonths);
+
+    return calculateTax(projectedGross, projectedPension, projectedSacrifice);
+};
+
+export const getTaxTrapAdvice = (projectedTaxableIncome) => {
+    if (projectedTaxableIncome > 100000 && projectedTaxableIncome < 125140) {
+        const excess = projectedTaxableIncome - 100000;
+        const allowanceLost = excess / 2;
+        const taxCost = allowanceLost * 0.40; // The 40% tax on the lost allowance makes it 60% effective
+
+        return {
+            active: true,
+            message: `You are in the 60% Tax Trap! You've lost £${allowanceLost.toLocaleString()} of your Personal Allowance.`,
+            advice: `Increasing pension contributions by £${excess.toLocaleString()} would recover your full allowance and save you £${(taxCost + (excess * 0.4)).toLocaleString()} in tax.`
+        };
+    }
+    return { active: false };
 };

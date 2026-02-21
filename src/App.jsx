@@ -12,15 +12,16 @@ function App() {
   const [contractedHours, setContractedHours] = useState(37.5);
   const [pensionPercent, setPensionPercent] = useState(5);
 
+  // Base items with frequency
   const [baseEnhancements, setBaseEnhancements] = useState([]);
-  const [baseMonthlySacrifices, setBaseMonthlySacrifices] = useState([]);
+  const [baseSacrifices, setBaseSacrifices] = useState([]);
 
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV5');
+    const saved = localStorage.getItem('taxTrackerDataV6');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -28,39 +29,46 @@ function App() {
       setContractedHours(d.contractedHours || 37.5);
       setPensionPercent(d.pensionPercent || 5);
       setBaseEnhancements(d.baseEnhancements || []);
-      setBaseMonthlySacrifices(d.baseMonthlySacrifices || []);
+      setBaseSacrifices(d.baseSacrifices || []);
       setMonths(d.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV5', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseMonthlySacrifices, months }));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseMonthlySacrifices, months]);
+    localStorage.setItem('taxTrackerDataV6', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
+
+  // --- Helpers ---
+  const getMonthlyValue = (amount, frequency) => {
+    if (frequency === 'monthly') return Number(amount);
+    if (frequency === 'annual') return Number(amount) / 12;
+    if (frequency === 'hourly') return (Number(amount) * contractedHours * 52) / 12;
+    return Number(amount);
+  };
 
   // --- Calculations ---
   const getFullMonthData = () => {
-    const annualBaseEnhancements = baseEnhancements.reduce((s, e) => s + Number(e.amount), 0);
-    const monthlySacrificeTotal = baseMonthlySacrifices.reduce((s, d) => s + Number(d.amount), 0);
+    const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
+    const baseSacrificeMonthlyTotal = baseSacrifices.reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
 
     const monthlyBaseSalary = baseSalary / 12;
-    const monthlyBaseEnhancement = annualBaseEnhancements / 12;
 
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
       const monthlyVariableIncome = m.income.reduce((s, i) => s + Number(i.amount), 0);
 
-      const totalMonthlyGrossForPension = monthlyBaseSalary + monthlyBaseEnhancement + otTotal + monthlyVariableIncome;
+      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + monthlyVariableIncome;
       const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
 
       return {
         income: [
           { name: 'Base Salary', amount: monthlyBaseSalary },
-          { name: 'Base Enhancements', amount: monthlyBaseEnhancement },
+          { name: 'Base Enhancements', amount: baseEnhancementMonthlyTotal },
           { name: 'Overtime Total', amount: otTotal },
           ...m.income
         ],
         deductions: [
-          { name: 'Base Monthly Sacrifice', amount: monthlySacrificeTotal, type: 'salary_sacrifice' },
+          { name: 'Base Sacrifices', amount: baseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
           { name: 'Pension', amount: pension, type: 'pension' },
           ...m.deductions
         ]
@@ -83,21 +91,21 @@ function App() {
 
   // --- Handlers ---
   const addBaseItem = (type) => {
-    const newItem = { id: Date.now().toString(), name: 'New Item', amount: 0 };
+    const newItem = { id: Date.now().toString(), name: 'New Item', amount: 0, frequency: 'monthly' };
     if (type === 'enhancement') setBaseEnhancements([...baseEnhancements, newItem]);
-    else setBaseMonthlySacrifices([...baseMonthlySacrifices, newItem]);
+    else setBaseSacrifices([...baseSacrifices, newItem]);
   };
 
   const updateBaseItem = (type, id, field, val) => {
-    const list = type === 'enhancement' ? [...baseEnhancements] : [...baseMonthlySacrifices];
+    const list = type === 'enhancement' ? [...baseEnhancements] : [...baseSacrifices];
     const updated = list.map(i => i.id === id ? { ...i, [field]: val } : i);
     if (type === 'enhancement') setBaseEnhancements(updated);
-    else setBaseMonthlySacrifices(updated);
+    else setBaseSacrifices(updated);
   };
 
   const removeBaseItem = (type, id) => {
     if (type === 'enhancement') setBaseEnhancements(baseEnhancements.filter(i => i.id !== id));
-    else setBaseMonthlySacrifices(baseMonthlySacrifices.filter(i => i.id !== id));
+    else setBaseSacrifices(baseSacrifices.filter(i => i.id !== id));
   };
 
   const addMonthItem = (type) => {
@@ -122,7 +130,7 @@ function App() {
   };
 
   const clearCacheAndReload = () => {
-    if (window.confirm("This will clear all non-saved data and force a fresh reload. Your saved salary data will be kept. Proceed?")) {
+    if (window.confirm("Perform hard reset? Your saved data version will be updated. Proceed?")) {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(registrations => {
           for (let registration of registrations) {
@@ -130,10 +138,6 @@ function App() {
           }
         });
       }
-      localStorage.removeItem('taxTrackerDataV1'); // Cleanup old keys
-      localStorage.removeItem('taxTrackerDataV2');
-      localStorage.removeItem('taxTrackerDataV3');
-      localStorage.removeItem('taxTrackerDataV4');
       window.location.reload(true);
     }
   };
@@ -141,7 +145,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v5.0 - PWA Fix & Base Sacrifices</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v6.0 - Flexible Frequencies</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -166,23 +170,29 @@ function App() {
 
         <div className="dashboard-grid">
           <div>
-            <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Annual Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Disturbance, Hourly Enhancements, etc. (Annual Amt)</div>
+            <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Disturbance, Hourly Enhancements, etc.</div>
             {baseEnhancements.map(e => (
-              <div key={e.id} style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" style={{ flex: 2 }} />
-                <input type="number" placeholder="Annual Amt" value={e.amount} onChange={(v) => updateBaseItem('enhancement', e.id, 'amount', Number(v.target.value))} className="input-field" style={{ flex: 1 }} />
+              <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 24px', gap: '0.4rem', marginBottom: '0.4rem', alignItems: 'center' }}>
+                <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
+                <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => updateBaseItem('enhancement', e.id, 'amount', Number(v.target.value))} className="input-field" />
+                <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
+                  <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                </select>
                 <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
           <div>
-            <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Monthly Salary Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Car, Cycle, Union Fees, etc. (Monthly Amt)</div>
-            {baseMonthlySacrifices.map(d => (
-              <div key={d.id} style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.4rem' }}>
-                <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" style={{ flex: 2 }} />
-                <input type="number" placeholder="Monthly Amt" value={d.amount} onChange={(v) => updateBaseItem('sacrifice', d.id, 'amount', Number(v.target.value))} className="input-field" style={{ flex: 1 }} />
+            <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Recurring items like Union, Car, Cycle, etc.</div>
+            {baseSacrifices.map(d => (
+              <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 24px', gap: '0.4rem', marginBottom: '0.4rem', alignItems: 'center' }}>
+                <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
+                <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => updateBaseItem('sacrifice', d.id, 'amount', Number(v.target.value))} className="input-field" />
+                <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
+                  <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                </select>
                 <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
               </div>
             ))}
@@ -246,7 +256,7 @@ function App() {
       </div>
 
       <footer style={{ marginTop: '3rem', textAlign: 'center', opacity: 0.4, fontSize: '0.8rem' }}>
-        <p>TaxTracker v5.1 • Built for Precise Financial Planning</p>
+        <p>TaxTracker v6.1 • Built for Precise Financial Planning</p>
         <button onClick={clearCacheAndReload} className="btn-secondary" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', marginTop: '0.5rem', opacity: 0.6 }}>
           <RefreshCw size={12} style={{ marginRight: '0.3rem' }} /> Clear Cache & Force Update
         </button>

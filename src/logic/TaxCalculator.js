@@ -1,83 +1,66 @@
 /**
  * UK Tax Calculator 2025/26 - Advanced Features
- * Handles Tax Codes, Overtime Calculations, and Tax-Free Expenses.
+ * Handles Tax Codes, Overtime Calculations, Tax-Free Expenses, and Base Enhancements.
  */
 
-/**
- * Parses a UK tax code to return the personal allowance.
- */
 const parseTaxCode = (code) => {
     const cleanCode = code.toUpperCase().trim();
-
-    if (cleanCode === 'BR') return 0; // Basic Rate
-    if (cleanCode === 'D0') return -999999; // Higher Rate
-    if (cleanCode === 'D1') return -9999999; // Additional Rate
-    if (cleanCode === 'NT') return 1000000; // No Tax
+    if (cleanCode === 'BR') return 0;
+    if (cleanCode === 'D0') return -999999;
+    if (cleanCode === 'D1') return -9999999;
+    if (cleanCode === 'NT') return 1000000;
 
     const match = cleanCode.match(/(\d+)/);
     if (match) {
         const value = parseInt(match[1]) * 10;
-        if (cleanCode.startsWith('K')) return -value; // K code (negative allowance)
+        if (cleanCode.startsWith('K')) return -value;
         return value;
     }
-    return 12570; // Default
+    return 12570;
 };
 
-/**
- * Main Tax Calculation Engine
- */
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L') => {
-    // Taxable income is gross minus salary sacrifice and pension
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
 
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
-    // Personal Allowance Taper (> £100k)
     if (taxableIncome > 100000 && personalAllowance > 0) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
     }
 
-    // Adjusted Taxable (K codes increase taxable income)
     let workingTaxable = taxableIncome;
     if (baseAllowance < 0) {
         workingTaxable += Math.abs(baseAllowance);
         personalAllowance = 0;
     }
 
-    // Income Tax Bands
     let incomeTax = 0;
     let remainingTaxable = workingTaxable - personalAllowance;
 
     if (remainingTaxable > 0) {
-        // Basic Rate
         const basicRateBand = Math.min(remainingTaxable, 50270 - 12570);
         incomeTax += basicRateBand * 0.20;
         remainingTaxable -= basicRateBand;
 
         if (remainingTaxable > 0) {
-            // Higher Rate
             const higherRateBand = Math.min(remainingTaxable, 125140 - 50270);
             incomeTax += higherRateBand * 0.40;
             remainingTaxable -= higherRateBand;
 
             if (remainingTaxable > 0) {
-                // Additional Rate
                 incomeTax += remainingTaxable * 0.45;
             }
         }
     }
 
-    // National Insurance
     let ni = 0;
     if (annualGross > 12570) {
         const mainBand = Math.min(annualGross, 50270) - 12570;
         ni += mainBand * 0.08;
-
         if (annualGross > 50270) {
-            const upperBand = annualGross - 50270;
-            ni += upperBand * 0.02;
+            ni += (annualGross - 50270) * 0.02;
         }
     }
 
@@ -94,25 +77,18 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     };
 };
 
-/**
- * Calculates hourly rate and overtime value
- */
 export const calculateOvertime = (annualSalary, contractedHours, otHours, multiplier) => {
     if (!contractedHours || contractedHours <= 0) return 0;
     const hourlyRate = (annualSalary / 52) / contractedHours;
     return hourlyRate * otHours * multiplier;
 };
 
-/**
- * Projects year-end totals including OT and Expenses
- */
 export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary) => {
     let ytdGross = 0;
     let ytdPension = 0;
     let ytdSacrifice = 0;
     let ytdTaxFree = 0;
 
-    // Sum up everything to current month
     for (let i = 0; i <= currentMonthIndex; i++) {
         const m = monthsData[i];
         ytdGross += m.income.reduce((s, item) => s + Number(item.amount), 0);
@@ -121,9 +97,13 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
         ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount) : 0), 0);
     }
 
-    // Project remaining months based on current month's trend
     const remaining = 11 - currentMonthIndex;
     const curr = monthsData[currentMonthIndex];
+
+    // Project based on current month's VARIABLE items (excluding base items which are handled in App.jsx's getFullMonthData)
+    // Actually, getFullMonthData ALREADY includes base items.
+    // So we just project the current month's "full" state forward.
+
     const monthlyGross = curr.income.reduce((s, item) => s + Number(item.amount), 0);
     const monthlyPension = curr.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
     const monthlySacrifice = curr.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);

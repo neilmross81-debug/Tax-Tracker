@@ -150,6 +150,9 @@ function App() {
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Projected taxable income: £{projection.taxableIncome.toLocaleString()}</p>
         </div>
       </div>
+      <footer style={{ marginTop: '3rem', textAlign: 'center', opacity: 0.4, fontSize: '0.8rem' }}>
+        TaxTracker v3.1 • Deployment Sync: {new Date().toLocaleTimeString()} • Press <strong>Ctrl+F5</strong> (PC) or <strong>Cmd+Shift+R</strong> (Mac) to force update.
+      </footer>
     </div>
   );
 }

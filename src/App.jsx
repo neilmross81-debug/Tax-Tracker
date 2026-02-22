@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, FileText } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -366,31 +366,6 @@ function App() {
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
     link.setAttribute("download", `TaxTracker_Unclaimed_OT_${taxYear.replace('/', '-')}.csv`);
-    link.style.visibility = 'hidden';
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportSA100CSV = () => {
-    const headers = ['Category', 'HMRC Box', 'Value (£)'];
-    const rows = [
-      ['Employment (Page TR 3)', 'Box 1: Pay from this employment', projection.taxableIncome.toFixed(2)],
-      ['Employment (Page TR 3)', 'Box 2: UK tax taken off pay', projection.incomeTax.toFixed(2)]
-    ];
-
-    if (projection.studentLoan > 0) {
-      rows.push(['Student Loans & Child Benefit (Page TR 5)', 'Student Loan Deductions', projection.studentLoan.toFixed(2)]);
-    }
-    if (projection.hicbc > 0) {
-      rows.push(['Student Loans & Child Benefit (Page TR 5)', 'High Income Child Benefit Charge', projection.hicbc.toFixed(2)]);
-    }
-
-    const csvContent = [headers, ...rows].map(e => `"${e[0]}","${e[1]}",${e[2]}`).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `TaxTracker_SA100_Export_${taxYear.replace('/', '-')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -851,81 +826,6 @@ function App() {
             </div>
           </div>
         )}
-        {activeTab === 'sa100' && (
-          <div>
-            <div className="glass-card" style={{ marginBottom: '2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-                <div>
-                  <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <FileText size={20} /> Self Assessment (SA100)
-                  </h2>
-                  <p style={{ fontSize: '0.85rem', opacity: 0.7, marginTop: '0.5rem' }}>
-                    Use these projected figures to help fill out your HMRC Self Assessment tax return.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
-                <h3 style={{ margin: '0 0 1rem 0', color: 'var(--primary)', fontSize: '1rem' }}>Employment (Page TR 3)</h3>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div>
-                      <div className="stat-label" style={{ color: 'white', fontWeight: 'bold' }}>Box 1: Pay from this employment</div>
-                      <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Total from your P45 or P60 (Taxable gross pay)</div>
-                    </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>£{projection.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div>
-                      <div className="stat-label" style={{ color: 'white', fontWeight: 'bold' }}>Box 2: UK tax taken off pay</div>
-                      <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Total tax deducted from P45 or P60</div>
-                    </div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>£{projection.incomeTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-                </div>
-              </div>
-
-              {(projection.studentLoan > 0 || projection.hicbc > 0) && (
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', marginTop: '1.5rem' }}>
-                  <h3 style={{ margin: '0 0 1rem 0', color: 'var(--primary)', fontSize: '1rem' }}>Student Loans & Child Benefit (Page TR 5)</h3>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {projection.studentLoan > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <div>
-                          <div className="stat-label" style={{ color: 'white', fontWeight: 'bold' }}>Student Loan Deductions</div>
-                          <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Total deducted by your employer</div>
-                        </div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>£{projection.studentLoan.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      </div>
-                    )}
-
-                    {projection.hicbc > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '0.5rem' }}>
-                        <div>
-                          <div className="stat-label" style={{ color: 'white', fontWeight: 'bold' }}>High Income Child Benefit Charge</div>
-                          <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Estimated charge for {childBenefitCount} children</div>
-                        </div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>£{projection.hicbc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ marginTop: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-                <button onClick={() => window.print()} className="btn-primary" style={{ padding: '0.75rem 2rem' }}>
-                  <Download size={18} style={{ marginRight: '0.5rem' }} /> Print SA100 Checklist (PDF)
-                </button>
-                <button onClick={exportSA100CSV} className="btn-secondary" style={{ padding: '0.75rem 2rem' }}>
-                  <FileText size={18} style={{ marginRight: '0.5rem' }} /> Export SA100 Data (.csv)
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
       <nav className="nav-bar">
@@ -936,10 +836,6 @@ function App() {
         <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
           <span>OT Log</span>
-        </div>
-        <div className={`nav-item ${activeTab === 'sa100' ? 'active' : ''}`} onClick={() => setActiveTab('sa100')}>
-          <FileText size={20} />
-          <span>SA100</span>
         </div>
         <div className={`nav-item ${activeTab === 'config' ? 'active' : ''}`} onClick={() => setActiveTab('config')}>
           <Settings size={20} />

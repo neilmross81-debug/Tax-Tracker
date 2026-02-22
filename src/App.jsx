@@ -736,7 +736,7 @@ function App() {
               <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
               <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
                 <div><label className="stat-label">Tax Year</label>
-                  <select value={taxYear} onChange={(e) => setTaxYear(e.target.value)} className="input-field">
+                  <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
                     <option value="2025/26">2025/26 (Upcoming)</option>
                     <option value="2024/25">2024/25 (Current)</option>
                   </select>

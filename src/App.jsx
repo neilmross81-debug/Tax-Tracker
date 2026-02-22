@@ -47,6 +47,7 @@ function App() {
   const [taxYear, setTaxYear] = useState('2025/26');
   const [studentLoanPlans, setStudentLoanPlans] = useState([]); // plan1, plan2, plan4, plan5, pgl
   const [childBenefitCount, setChildBenefitCount] = useState(0);
+  const [holidaySupplementPercent, setHolidaySupplementPercent] = useState(8.3);
 
   const [sandboxMode, setSandboxMode] = useState(false);
   const [sandboxSalary, setSandboxSalary] = useState(null);
@@ -81,8 +82,8 @@ function App() {
     }
 
     // Ensure default profiles exist
-    if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
-    if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
+    if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, holidaySupplementPercent: 8.3, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
+    if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, holidaySupplementPercent: 8.3, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
 
     setProfiles(loadedProfiles);
 
@@ -92,7 +93,8 @@ function App() {
     setTaxCode(activeProf.taxCode || '1257L');
     setBaseSalary(activeProf.baseSalary || 45000);
     setContractedHours(activeProf.contractedHours || 37.5);
-    setPensionPercent(activeProf.pensionPercent || 5);
+    setPensionPercent(activeProf.pensionPercent !== undefined ? activeProf.pensionPercent : 5);
+    setHolidaySupplementPercent(activeProf.holidaySupplementPercent !== undefined ? activeProf.holidaySupplementPercent : 8.3);
     setStudentLoanPlans(activeProf.studentLoanPlans || []);
     setChildBenefitCount(activeProf.childBenefitCount || 0);
     setBaseEnhancements(activeProf.baseEnhancements || []);
@@ -107,12 +109,12 @@ function App() {
     const updatedProfiles = {
       ...profiles,
       [taxYear]: {
-        taxCode, baseSalary, contractedHours, pensionPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
+        taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
       }
     };
     setProfiles(updatedProfiles);
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -122,7 +124,8 @@ function App() {
     setTaxCode(activeProf.taxCode || '1257L');
     setBaseSalary(activeProf.baseSalary || 45000);
     setContractedHours(activeProf.contractedHours || 37.5);
-    setPensionPercent(activeProf.pensionPercent || 5);
+    setPensionPercent(activeProf.pensionPercent !== undefined ? activeProf.pensionPercent : 5);
+    setHolidaySupplementPercent(activeProf.holidaySupplementPercent !== undefined ? activeProf.holidaySupplementPercent : 8.3);
     setStudentLoanPlans(activeProf.studentLoanPlans || []);
     setChildBenefitCount(activeProf.childBenefitCount || 0);
     setBaseEnhancements(activeProf.baseEnhancements || []);
@@ -177,7 +180,9 @@ function App() {
 
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0) + sandboxOtMonthly;
-      const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const holidaySupplementAmount = otTotal > 0 ? (otTotal * (holidaySupplementPercent / 100)) : 0;
+
+      const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + holidaySupplementAmount;
 
       const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
       const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome;
@@ -195,11 +200,16 @@ function App() {
         mappedGrossSacrifices.push({ name: 'Sandbox Exp.', amount: sandboxSacrifice / 12, type: 'salary_sacrifice' });
       }
 
+      const otRows = [{ name: 'Overtime', amount: otTotal }];
+      if (holidaySupplementAmount > 0) {
+        otRows.push({ name: `OT Holiday Supp. (${holidaySupplementPercent}%)`, amount: holidaySupplementAmount });
+      }
+
       return {
         income: [
           { name: 'Base Salary', amount: monthlyBaseSalary },
           ...mappedEnhancements,
-          { name: 'Overtime', amount: otTotal },
+          ...otRows,
           ...m.income,
           ...m.deductions.filter(d => d.type === 'income')
         ],
@@ -213,7 +223,7 @@ function App() {
         taxFree: varTaxFree
       };
     });
-  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
+  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, holidaySupplementPercent]);
 
   // 3. Projections
   const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
@@ -376,7 +386,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v15.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v16.0</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.8rem' }}>
@@ -745,6 +755,7 @@ function App() {
                 <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
                 <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
+                <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
                 <div><label className="stat-label">Children (Child Benefit)</label><input type="number" value={childBenefitCount} onChange={(e) => handleNumericInput(e.target.value, setChildBenefitCount)} className="input-field" /></div>
               </div>
 

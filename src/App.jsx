@@ -4,6 +4,35 @@ import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recom
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
+const DonutChart = ({ data }) => {
+  const total = data.reduce((s, i) => s + i.value, 0);
+  let cumulativePercent = 0;
+
+  const getCoordinatesForPercent = (percent) => {
+    const x = Math.cos(2 * Math.PI * percent);
+    const y = Math.sin(2 * Math.PI * percent);
+    return [x, y];
+  };
+
+  return (
+    <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)', width: '100%', maxWidth: '200px', margin: '0 auto', display: 'block' }}>
+      {data.map((slice, i) => {
+        const [startX, startY] = getCoordinatesForPercent(cumulativePercent);
+        cumulativePercent += slice.value / total;
+        const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
+        const largeArcFlag = slice.value / total > 0.5 ? 1 : 0;
+        const pathData = [
+          `M ${startX} ${startY}`,
+          `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+          `L 0 0`,
+        ].join(' ');
+        return <path key={i} d={pathData} fill={slice.color} stroke="var(--bg-dark)" strokeWidth="0.01" />;
+      })}
+      <circle cx="0" cy="0" r="0.6" fill="var(--bg-dark)" />
+    </svg>
+  );
+};
+
 function App() {
   // --- UI State ---
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, overtime, config
@@ -15,6 +44,13 @@ function App() {
   const [baseSalary, setBaseSalary] = useState(45000);
   const [contractedHours, setContractedHours] = useState(37.5);
   const [pensionPercent, setPensionPercent] = useState(5);
+  const [taxYear, setTaxYear] = useState('2025/26');
+  const [studentLoanPlans, setStudentLoanPlans] = useState([]); // plan1, plan2, plan4, plan5, pgl
+  const [childBenefitCount, setChildBenefitCount] = useState(0);
+
+  const [sandboxMode, setSandboxMode] = useState(false);
+  const [sandboxSalary, setSandboxSalary] = useState(null);
+  const [sandboxPension, setSandboxPension] = useState(null);
 
   const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
@@ -31,6 +67,9 @@ function App() {
       setBaseSalary(d.baseSalary || 45000);
       setContractedHours(d.contractedHours || 37.5);
       setPensionPercent(d.pensionPercent || 5);
+      setTaxYear(d.taxYear || '2025/26');
+      setStudentLoanPlans(d.studentLoanPlans || []);
+      setChildBenefitCount(d.childBenefitCount || 0);
       setBaseEnhancements(d.baseEnhancements || []);
       setBaseSacrifices(d.baseSacrifices || []);
       setMonths(d.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
@@ -38,8 +77,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV12', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
+    localStorage.setItem('taxTrackerDataV12', JSON.stringify({
+      taxCode, baseSalary, contractedHours, pensionPercent,
+      taxYear, studentLoanPlans, childBenefitCount,
+      baseEnhancements, baseSacrifices, months
+    }));
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
   const getMonthlyValue = (amount, frequency) => {
@@ -62,13 +105,13 @@ function App() {
 
   // 1. Recurring Base for future projection
   const futureBaseData = useMemo(() => {
-    const monthlyBaseSalary = baseSalary / 12;
+    const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
     const baseEnhancementMonthly = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
     const grossBaseSacrificeMonthly = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
     const netBaseSacrificeMonthly = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
 
     const grossForPension = monthlyBaseSalary + baseEnhancementMonthly;
-    const pension = grossForPension * (pensionPercent / 100);
+    const pension = grossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
     return {
       gross: monthlyBaseSalary + baseEnhancementMonthly,
@@ -84,7 +127,7 @@ function App() {
     const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
     const grossBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
     const netBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
-    const monthlyBaseSalary = baseSalary / 12;
+    const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
 
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
@@ -118,7 +161,11 @@ function App() {
   }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices]);
 
   // 3. Projections
-  const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode);
+  const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
+    taxYear,
+    studentLoanPlans,
+    childBenefitCount
+  });
 
   // 4. Current Selected Month Summary Logic
   const currentMonthFull = monthsActualData[selectedMonthIdx];
@@ -132,10 +179,20 @@ function App() {
     monthlyPension * 12,
     monthlyGrossSacrifice * 12,
     taxCode,
-    monthlyNetSacrifice * 12
+    monthlyNetSacrifice * 12,
+    { taxYear, studentLoanPlans, childBenefitCount }
   );
 
   const totalMonthlyNet = (monthlyResultsAnnualized.annualTakeHome / 12) + currentMonthFull.taxFree;
+
+  const chartData = [
+    { name: 'Net Pay', value: monthlyResultsAnnualized.annualTakeHome / 12, color: 'var(--success)' },
+    { name: 'Income Tax', value: monthlyResultsAnnualized.incomeTax / 12, color: 'var(--error)' },
+    { name: 'NI', value: monthlyResultsAnnualized.ni / 12, color: '#f59e0b' },
+    { name: 'Student Loan', value: monthlyResultsAnnualized.studentLoan / 12, color: '#06b6d4' },
+    { name: 'Pension', value: monthlyResultsAnnualized.pensionContribution / 12, color: 'var(--primary)' },
+    { name: 'Other', value: monthlyResultsAnnualized.hicbc / 12 + monthlyResultsAnnualized.netDeductions / 12, color: '#6b7280' }
+  ].filter(i => i.value > 0);
 
   // Overtime Processing
   const allOvertime = useMemo(() => {
@@ -203,12 +260,111 @@ function App() {
     }
   };
 
+  const exportToCSV = () => {
+    const headers = ['Month', 'Gross Income', 'Pension', 'Salary Sacrifice', 'Tax Free Expenses', 'Net Pay'];
+    const rows = monthsActualData.map((m, i) => {
+      const gross = m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
+      const pension = m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount || 0) : 0), 0);
+      const sacrifice = m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount || 0) : 0), 0);
+      const taxFree = m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
+
+      const results = calculateTax(gross * 12, pension * 12, sacrifice * 12, taxCode, 0, { taxYear, studentLoanPlans, childBenefitCount });
+      const net = (results.annualTakeHome / 12) + taxFree;
+
+      return [MONTHS[i], gross, pension, sacrifice, taxFree, net];
+    });
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `TaxTracker_Export_${taxYear.replace('/', '-')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="app-container">
-      <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v12.1</span></h1>
-        <p>UK Tax Year 2025/26 - Professional Grade</p>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v14.0</span></h1>
+          <p>UK Tax Year 2025/26 - Professional Grade</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.8rem' }}>
+          <button
+            onClick={() => {
+              if (!sandboxMode) {
+                setSandboxSalary(baseSalary);
+                setSandboxPension(pensionPercent);
+              }
+              setSandboxMode(!sandboxMode);
+            }}
+            className={`btn-icon ${sandboxMode ? 'active' : ''}`}
+            style={{
+              background: sandboxMode ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+              padding: '0.5rem 1rem',
+              borderRadius: '2rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'white',
+              fontSize: '0.85rem'
+            }}
+          >
+            <Calculator size={16} />
+            <span>{sandboxMode ? 'Exit What-If' : 'What-If?'}</span>
+          </button>
+        </div>
       </header>
+
+      {sandboxMode && (
+        <div className="glass-card" style={{ border: '2px dashed var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.1)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={18} /> What-If Scenario Mode
+            </h3>
+            <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Experimental: Changes here won't save to your main data.</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+            <div>
+              <label className="stat-label">Hypothetical Salary (£)</label>
+              <input
+                type="range" min={baseSalary * 0.5} max={baseSalary * 2} step={500}
+                value={sandboxSalary}
+                onChange={(e) => setSandboxSalary(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--primary)' }}
+              />
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{sandboxSalary?.toLocaleString()}</div>
+            </div>
+            <div>
+              <label className="stat-label">Hypothetical Pension %</label>
+              <input
+                type="range" min={0} max={50} step={1}
+                value={sandboxPension}
+                onChange={(e) => setSandboxPension(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--primary)' }}
+              />
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>{sandboxPension}%</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setBaseSalary(sandboxSalary);
+                  setPensionPercent(sandboxPension);
+                  setSandboxMode(false);
+                }}
+                className="btn-primary"
+                style={{ width: '100%', padding: '0.6rem' }}
+              >
+                Apply to Main
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {trapAdvice.active && (
         <div className="glass-card" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.15)' }}>
@@ -277,8 +433,20 @@ function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
                   <span>Pension:</span>
-                  <span style={{ color: 'var(--error)' }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style={{ color: 'var(--error)' }}>-£{(monthlyPension).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
+                {monthlyResultsAnnualized.studentLoan > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                    <span>Student Loan:</span>
+                    <span style={{ color: 'var(--error)' }}>-£{(monthlyResultsAnnualized.studentLoan / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {monthlyResultsAnnualized.hicbc > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                    <span>HICBC (Child Benefit):</span>
+                    <span style={{ color: 'var(--error)' }}>-£{(monthlyResultsAnnualized.hicbc / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
                   <span>Net Deductions (Post-Tax):</span>
                   <span style={{ color: 'var(--error)' }}>-£{monthlyNetSacrifice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -315,11 +483,33 @@ function App() {
             </div>
 
             <div className="glass-card">
+              <h2 style={{ margin: 0, marginBottom: '1.5rem' }}>Wealth Breakdown</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
+                <DonutChart data={chartData} />
+                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.8rem' }}>
+                  {chartData.map(i => (
+                    <div key={i.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
+                      <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: i.color }}></div>
+                      <span style={{ opacity: 0.7 }}>{i.name}</span>
+                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{Math.round((i.value / (monthlyGross || 1)) * 100)}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card">
               <h2 style={{ margin: 0 }}>Annual Forecast</h2>
               <div className="stat-value" style={{ color: 'var(--success)', fontSize: '2.2rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', opacity: 0.7 }}>
                 <div><div className="stat-label">Taxable Income</div>£{projection.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 <div><div className="stat-label">Total Tax/NI</div>£{(projection.incomeTax + projection.ni).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {projection.studentLoan > 0 && (
+                  <div><div className="stat-label">Student Loan</div>£{projection.studentLoan.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                )}
+                {projection.hicbc > 0 && (
+                  <div><div className="stat-label">HICBC Charge</div>£{projection.hicbc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                )}
               </div>
               <hr style={{ opacity: 0.1, margin: '1.5rem 0' }} />
 
@@ -414,10 +604,37 @@ function App() {
             <div className="glass-card">
               <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
               <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
+                <div><label className="stat-label">Tax Year</label>
+                  <select value={taxYear} onChange={(e) => setTaxYear(e.target.value)} className="input-field">
+                    <option value="2025/26">2025/26 (Upcoming)</option>
+                    <option value="2024/25">2024/25 (Current)</option>
+                  </select>
+                </div>
                 <div><label className="stat-label">Annual Salary (£)</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
                 <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
                 <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
+                <div><label className="stat-label">Children (Child Benefit)</label><input type="number" value={childBenefitCount} onChange={(e) => handleNumericInput(e.target.value, setChildBenefitCount)} className="input-field" /></div>
+              </div>
+
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="stat-label">Student Loan Plans</label>
+                <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                  {['plan1', 'plan2', 'plan4', 'plan5', 'pgl'].map(plan => (
+                    <label key={plan} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.4rem', border: studentLoanPlans.includes(plan) ? '1px solid var(--primary)' : '1px solid transparent' }}>
+                      <input
+                        type="checkbox"
+                        checked={studentLoanPlans.includes(plan)}
+                        onChange={(e) => {
+                          if (e.target.checked) setStudentLoanPlans([...studentLoanPlans, plan]);
+                          else setStudentLoanPlans(studentLoanPlans.filter(p => p !== plan));
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                      <span style={{ color: studentLoanPlans.includes(plan) ? 'var(--primary)' : 'inherit' }}>{plan.toUpperCase()}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="dashboard-grid">
@@ -464,9 +681,15 @@ function App() {
                 </div>
               </div>
 
-              <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-                <button onClick={clearCacheAndReload} className="btn-secondary">
-                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Reset & Update Code
+              <div style={{ marginTop: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+                <button onClick={exportToCSV} className="btn-primary" style={{ padding: '0.75rem 2rem' }}>
+                  <Download size={18} style={{ marginRight: '0.5rem' }} /> Export Year to CSV
+                </button>
+                <button onClick={() => window.print()} className="btn-secondary">
+                  <LayoutDashboard size={14} style={{ marginRight: '0.5rem' }} /> Print PDF Report
+                </button>
+                <button onClick={clearCacheAndReload} className="btn-secondary" style={{ opacity: 0.5 }}>
+                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Force Reset & Update
                 </button>
               </div>
             </div>

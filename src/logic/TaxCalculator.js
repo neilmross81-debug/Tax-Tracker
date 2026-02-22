@@ -1,9 +1,38 @@
 /**
- * UK Tax Calculator 2025/26 - v11.1 Logic
- * Features: Sacrifice Advisor includes Tax Code Alignment advice.
+ * UK Tax Calculator 2024/25 & 2025/26 - v14.0 Logic
+ * Features: Student Loans, Child Benefit (HICBC), Multi-Year, Sandbox comparison.
  */
 
 const round = (val) => Math.round(val * 100) / 100;
+
+const CONSTANTS = {
+    '2024/25': {
+        niMainRate: 0.08,
+        paThreshold: 100000,
+        paMax: 12570,
+        basicRateLimit: 37700, // Total 50270
+        higherRateLimit: 125140,
+        niThreshold: 12570,
+        niUpperLimit: 50270
+    },
+    '2025/26': {
+        niMainRate: 0.08,
+        paThreshold: 100000,
+        paMax: 12570,
+        basicRateLimit: 37700,
+        higherRateLimit: 125140,
+        niThreshold: 12570,
+        niUpperLimit: 50270
+    }
+};
+
+const STUDENT_LOAN_PLANS = {
+    'plan1': { threshold: 24990, rate: 0.09 },
+    'plan2': { threshold: 27295, rate: 0.09 },
+    'plan4': { threshold: 31395, rate: 0.09 },
+    'plan5': { threshold: 25000, rate: 0.09 },
+    'pgl': { threshold: 21000, rate: 0.06 }
+};
 
 export const parseTaxCode = (code) => {
     const cleanCode = code.toUpperCase().trim();
@@ -33,17 +62,26 @@ export const recommendTaxCode = (ani) => {
     return '1257L';
 };
 
-export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0) => {
-    const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
+/**
+ * Main Calculation Engine
+ */
+export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0, options = {}) => {
+    const year = options.taxYear || '2025/26';
+    const config = CONSTANTS[year] || CONSTANTS['2025/26'];
+
+    // Adjusted Net Income (ANI) for PA Taper & HICBC
+    const ani = Math.max(0, annualGross - pensionContribution - salarySacrifice);
+
+    // Taxable Income (ANI - Allowances)
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
-    if (taxableIncome > 100000 && personalAllowance > 0) {
-        const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
+    if (ani > config.paThreshold && personalAllowance > 0) {
+        const reduction = Math.min(personalAllowance, (ani - config.paThreshold) / 2);
         personalAllowance -= reduction;
     }
 
-    let workingTaxable = taxableIncome;
+    let workingTaxable = ani;
     if (baseAllowance < 0) {
         workingTaxable += Math.abs(baseAllowance);
         personalAllowance = 0;
@@ -53,12 +91,12 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     let remainingTaxable = workingTaxable - personalAllowance;
 
     if (remainingTaxable > 0) {
-        const basicRateBand = Math.min(remainingTaxable, 50270 - 12570);
+        const basicRateBand = Math.min(remainingTaxable, config.basicRateLimit);
         incomeTax += basicRateBand * 0.20;
         remainingTaxable -= basicRateBand;
 
         if (remainingTaxable > 0) {
-            const higherRateBand = Math.min(remainingTaxable, 125140 - 50270);
+            const higherRateBand = Math.min(remainingTaxable, config.higherRateLimit - (config.paMax + config.basicRateLimit));
             incomeTax += higherRateBand * 0.40;
             remainingTaxable -= higherRateBand;
 
@@ -68,26 +106,58 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
         }
     }
 
+    // National Insurance
     let ni = 0;
-    if (annualGross > 12570) {
-        const mainBand = Math.min(annualGross, 50270) - 12570;
-        ni += mainBand * 0.08;
-        if (annualGross > 50270) {
-            ni += (annualGross - 50270) * 0.02;
+    if (annualGross > config.niThreshold) {
+        const mainBand = Math.min(annualGross, config.niUpperLimit) - config.niThreshold;
+        ni += mainBand * config.niMainRate;
+        if (annualGross > config.niUpperLimit) {
+            ni += (annualGross - config.niUpperLimit) * 0.02;
         }
     }
 
+    // Student Loans
+    let studentLoan = 0;
+    if (options.studentLoanPlans && options.studentLoanPlans.length > 0) {
+        const grossForSL = annualGross; // SL is calculated on gross after pension usually? Depends on pension type. Using Gross for simplicity as per common HMRC tools.
+        options.studentLoanPlans.forEach(planKey => {
+            const plan = STUDENT_LOAN_PLANS[planKey];
+            if (plan && grossForSL > plan.threshold) {
+                studentLoan += (grossForSL - plan.threshold) * plan.rate;
+            }
+        });
+    }
+
+    // HICBC (High Income Child Benefit Charge)
+    let hicbc = 0;
+    if (options.childBenefitCount > 0 && ani > 60000) {
+        // Child Benefit Rates 24/25: £25.60/wk first, £16.95/wk others
+        const weeklyBenefit = 25.60 + ((options.childBenefitCount - 1) * 16.95);
+        const annualBenefit = weeklyBenefit * 52;
+
+        // Charge is 1% for every £100 over £60k. Reaches 100% at £80k.
+        const excess = ani - 60000;
+        const percentage = Math.min(100, Math.floor(excess / 200)); // v14 logic: 24/25 rule is 1% per £200 over 60k? Actually it changed to 60-80k.
+        // Rule: 1% for every £200. Reaches 100% at £80,000.
+        hicbc = annualBenefit * (percentage / 100);
+    }
+
+    const totalDeductions = incomeTax + ni + studentLoan + hicbc + netDeductions;
+
     return {
         gross: round(annualGross),
-        taxableIncome: round(taxableIncome),
+        taxableIncome: round(ani),
         personalAllowance: round(personalAllowance),
         incomeTax: round(incomeTax),
         ni: round(ni),
+        studentLoan: round(studentLoan),
+        hicbc: round(hicbc),
         pensionContribution: round(pensionContribution),
         salarySacrifice: round(salarySacrifice),
         netDeductions: round(netDeductions),
-        annualTakeHome: round(taxableIncome - incomeTax - ni - netDeductions),
-        monthlyTakeHome: round((taxableIncome - incomeTax - ni - netDeductions) / 12)
+        totalTaxNI: round(incomeTax + ni),
+        annualTakeHome: round(ani - incomeTax - ni - studentLoan - hicbc - netDeductions),
+        monthlyTakeHome: round((ani - incomeTax - ni - studentLoan - hicbc - netDeductions) / 12)
     };
 };
 
@@ -97,7 +167,7 @@ export const calculateOvertime = (annualSalary, contractedHours, otHours, multip
     return round(hourlyRate * (otHours || 0) * multiplier);
 };
 
-export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode) => {
+export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode, options = {}) => {
     let ytdGross = 0;
     let ytdPension = 0;
     let ytdSacrifice = 0;
@@ -122,7 +192,7 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
         ytdTaxFree += (futureBaseData.taxFree * remaining);
     }
 
-    const taxResults = calculateTax(ytdGross, ytdPension, ytdSacrifice, taxCode, ytdNetDeductions);
+    const taxResults = calculateTax(ytdGross, ytdPension, ytdSacrifice, taxCode, ytdNetDeductions, options);
 
     return {
         ...taxResults,

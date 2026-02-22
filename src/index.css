@@ -208,3 +208,49 @@ select.input-field {
   background: rgba(255, 255, 255, 0.05);
   color: white;
 }
+
+@media print {
+
+  .nav-bar,
+  .btn-icon,
+  .btn-primary,
+  .btn-secondary,
+  header button,
+  .config-tabs,
+  .input-field select,
+  .input-field button {
+    display: none !important;
+  }
+
+  .app-container {
+    padding: 0;
+    max-width: 100%;
+    background: white;
+    color: black;
+  }
+
+  .glass-card {
+    background: white !important;
+    border: 1px solid #eee !important;
+    box-shadow: none !important;
+    color: black !important;
+    break-inside: avoid;
+    margin-bottom: 20px;
+  }
+
+  h1,
+  h2,
+  h3,
+  .stat-label,
+  .stat-value {
+    color: black !important;
+  }
+
+  .dashboard-grid {
+    display: block !important;
+  }
+
+  svg {
+    filter: none !important;
+  }
+}

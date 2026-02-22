@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV10_1');
+    const saved = localStorage.getItem('taxTrackerDataV11');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV10_1', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV11', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -207,15 +207,46 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v10.1</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.0</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
       {trapAdvice.active && (
-        <div className="glass-card" style={{ border: '1px solid var(--error)', marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <AlertTriangle color="var(--error)" />
-            <div><strong>Tax Trap Alert:</strong> {trapAdvice.message} <p style={{ margin: 0, opacity: 0.8 }}>{trapAdvice.advice}</p></div>
+        <div className="glass-card" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.15)' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 300px' }}>
+              <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginBottom: '1rem' }}>
+                <TrendingUp color="var(--primary)" />
+                <strong>Sacrifice Advisor (ANI-Reduction)</strong>
+              </div>
+              <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>{trapAdvice.message}</p>
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  <span>Excess to Sacrifice:</span>
+                  <strong style={{ color: 'var(--primary)' }}>£{trapAdvice.excessAmount.toLocaleString()}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                  <span>Personal Allowance Lost:</span>
+                  <strong style={{ color: 'var(--error)' }}>£{trapAdvice.allowanceLost.toLocaleString()}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                  <span>Potential Tax Saving:</span>
+                  <strong style={{ color: 'var(--success)' }}>£{trapAdvice.potentialSaving.toLocaleString()}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ flex: '2 1 400px' }}>
+              <div className="stat-label">Recommended Strategies:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.8rem', marginTop: '0.5rem' }}>
+                {trapAdvice.options.map(opt => (
+                  <div key={opt.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '0.75rem', borderRadius: '0.5rem' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.25rem' }}>{opt.label}</div>
+                    <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{opt.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

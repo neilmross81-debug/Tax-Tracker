@@ -1,6 +1,6 @@
 /**
- * UK Tax Calculator 2025/26 - v10.0 Logic
- * Fixes: Monthly scaling bug, Adjusted Net Income (ANI) alignment.
+ * UK Tax Calculator 2025/26 - v11.0 Logic
+ * Features: Expanded Sacrifice Advisor (EV, Cycle, Shares, Pension).
  */
 
 const round = (val) => Math.round(val * 100) / 100;
@@ -135,13 +135,39 @@ export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross) => {
     if (ani > 100000 && ani < 125140) {
         const excess = ani - 100000;
         const allowanceLost = excess / 2;
+        const netTaxImpact = (allowanceLost * 0.40) + (excess * 0.40); // 40% on lost allowance + 40% on excess
+
         const percentageIncrease = (excess / annualGross) * 100;
         const suggestedPension = Math.ceil(currentPensionPercent + percentageIncrease);
 
         return {
             active: true,
+            excessAmount: round(excess),
+            allowanceLost: round(allowanceLost),
+            potentialSaving: round(netTaxImpact),
             message: `Adjusted Net Income: £${round(ani).toLocaleString()} is in the 60% Tax Trap bracket.`,
-            advice: `Consider raising pension to ${suggestedPension}% to reclaim £${round(allowanceLost).toLocaleString()} of allowance.`
+            options: [
+                {
+                    label: "Additional Pension",
+                    value: `Increase pension contribution to ${suggestedPension}%`,
+                    type: "pension"
+                },
+                {
+                    label: "Cycle to Work",
+                    value: `Scheme value up to £${round(excess).toLocaleString()} (Annually)`,
+                    type: "scheme"
+                },
+                {
+                    label: "EV Car Lease",
+                    value: `Sacrifice £${round(excess / 12).toLocaleString()} per month towards an EV Car`,
+                    type: "scheme"
+                },
+                {
+                    label: "Workplace Benefits",
+                    value: `Opt-in for sacrificed Healthcare, Shares (SIP), or Dental`,
+                    type: "scheme"
+                }
+            ]
         };
     }
     return { active: false };

@@ -51,6 +51,8 @@ function App() {
   const [sandboxMode, setSandboxMode] = useState(false);
   const [sandboxSalary, setSandboxSalary] = useState(null);
   const [sandboxPension, setSandboxPension] = useState(null);
+  const [sandboxOvertime, setSandboxOvertime] = useState(null);
+  const [sandboxSacrifice, setSandboxSacrifice] = useState(null);
 
   const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
@@ -58,31 +60,77 @@ function App() {
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
-  // --- Persistence Logic ---
+  // --- Persistence Logic (Yearly Profiles v14.1) ---
+  const [profiles, setProfiles] = useState({});
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load Component
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV12');
+    const saved = localStorage.getItem('taxTrackerDataV14_Profiles');
+    let loadedProfiles = {};
     if (saved) {
-      const d = JSON.parse(saved);
-      setTaxCode(d.taxCode || '1257L');
-      setBaseSalary(d.baseSalary || 45000);
-      setContractedHours(d.contractedHours || 37.5);
-      setPensionPercent(d.pensionPercent || 5);
-      setTaxYear(d.taxYear || '2025/26');
-      setStudentLoanPlans(d.studentLoanPlans || []);
-      setChildBenefitCount(d.childBenefitCount || 0);
-      setBaseEnhancements(d.baseEnhancements || []);
-      setBaseSacrifices(d.baseSacrifices || []);
-      setMonths(d.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+      loadedProfiles = JSON.parse(saved);
+    } else {
+      // Migrate legacy data if exists
+      const legacy = localStorage.getItem('taxTrackerDataV12');
+      if (legacy) {
+        const d = JSON.parse(legacy);
+        const legacyYear = d.taxYear || '2025/26';
+        loadedProfiles[legacyYear] = d;
+      }
     }
+
+    // Ensure default profiles exist
+    if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
+    if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
+
+    setProfiles(loadedProfiles);
+
+    // Apply active profile (default 2025/26 on startup unless state already tells us otherwise, but since it's mount we use default)
+    const activeProf = loadedProfiles['2025/26'];
+    setTaxYear('2025/26');
+    setTaxCode(activeProf.taxCode || '1257L');
+    setBaseSalary(activeProf.baseSalary || 45000);
+    setContractedHours(activeProf.contractedHours || 37.5);
+    setPensionPercent(activeProf.pensionPercent || 5);
+    setStudentLoanPlans(activeProf.studentLoanPlans || []);
+    setChildBenefitCount(activeProf.childBenefitCount || 0);
+    setBaseEnhancements(activeProf.baseEnhancements || []);
+    setBaseSacrifices(activeProf.baseSacrifices || []);
+    setMonths(activeProf.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+    setIsLoaded(true);
   }, []);
 
+  // Save current state into the active profile
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV12', JSON.stringify({
-      taxCode, baseSalary, contractedHours, pensionPercent,
-      taxYear, studentLoanPlans, childBenefitCount,
-      baseEnhancements, baseSacrifices, months
-    }));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months]);
+    if (!isLoaded) return;
+    const updatedProfiles = {
+      ...profiles,
+      [taxYear]: {
+        taxCode, baseSalary, contractedHours, pensionPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
+      }
+    };
+    setProfiles(updatedProfiles);
+    localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
+
+  // Switch Year Handler
+  const handleYearSwitch = (newYear) => {
+    setTaxYear(newYear);
+    const activeProf = profiles[newYear];
+
+    setTaxCode(activeProf.taxCode || '1257L');
+    setBaseSalary(activeProf.baseSalary || 45000);
+    setContractedHours(activeProf.contractedHours || 37.5);
+    setPensionPercent(activeProf.pensionPercent || 5);
+    setStudentLoanPlans(activeProf.studentLoanPlans || []);
+    setChildBenefitCount(activeProf.childBenefitCount || 0);
+    setBaseEnhancements(activeProf.baseEnhancements || []);
+    setBaseSacrifices(activeProf.baseSacrifices || []);
+    setMonths(activeProf.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+    setSandboxMode(false);
+  };
+
 
   // --- Helpers ---
   const getMonthlyValue = (amount, frequency) => {
@@ -107,58 +155,65 @@ function App() {
   const futureBaseData = useMemo(() => {
     const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
     const baseEnhancementMonthly = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
-    const grossBaseSacrificeMonthly = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+    const grossBaseSacrificeMonthly = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0) + (sandboxMode && sandboxSacrifice !== null ? sandboxSacrifice / 12 : 0);
     const netBaseSacrificeMonthly = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
 
     const grossForPension = monthlyBaseSalary + baseEnhancementMonthly;
     const pension = grossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
     return {
-      gross: monthlyBaseSalary + baseEnhancementMonthly,
+      gross: monthlyBaseSalary + baseEnhancementMonthly + (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0),
       pension: pension,
       grossSacrifice: grossBaseSacrificeMonthly,
       netSacrifice: netBaseSacrificeMonthly,
       taxFree: 0
     };
-  }, [baseSalary, baseEnhancements, baseSacrifices, pensionPercent, contractedHours]);
+  }, [baseSalary, baseEnhancements, baseSacrifices, pensionPercent, contractedHours, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
 
   // 2. Prepare Actual Month Data (April to selected month)
   const monthsActualData = useMemo(() => {
-    const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
-    const grossBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
-    const netBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
     const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
+    const sandboxOtMonthly = (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0);
 
     return months.map(m => {
-      const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0) + sandboxOtMonthly;
       const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
+      const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
       const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome;
-      const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
+      const pension = totalMonthlyGrossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
-      const varGrossSacrifice = m.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
-      const varNetDeduction = m.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
       const varTaxFree = m.deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+
+      // Map recurring items into specific lines
+      const mappedEnhancements = baseEnhancements.map(e => ({ name: e.name || 'Enhancement', amount: getMonthlyValue(e.amount, e.frequency) }));
+      const mappedGrossSacrifices = baseSacrifices.filter(d => d.type !== 'net_sacrifice').map(d => ({ name: d.name || 'Sacrifice', amount: getMonthlyValue(d.amount, d.frequency), type: 'salary_sacrifice' }));
+      const mappedNetSacrifices = baseSacrifices.filter(d => d.type === 'net_sacrifice').map(d => ({ name: d.name || 'Net Sacrifice', amount: getMonthlyValue(d.amount, d.frequency), type: 'net_sacrifice' }));
+
+      // Add sandbox sacrifice if exists
+      if (sandboxMode && sandboxSacrifice > 0) {
+        mappedGrossSacrifices.push({ name: 'Sandbox Exp.', amount: sandboxSacrifice / 12, type: 'salary_sacrifice' });
+      }
 
       return {
         income: [
           { name: 'Base Salary', amount: monthlyBaseSalary },
-          { name: 'Base Enhancements', amount: baseEnhancementMonthlyTotal },
+          ...mappedEnhancements,
           { name: 'Overtime', amount: otTotal },
           ...m.income,
           ...m.deductions.filter(d => d.type === 'income')
         ],
         deductions: [
-          { name: 'Base Gross Sacrifices', amount: grossBaseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
+          ...mappedGrossSacrifices,
           { name: 'Pension', amount: pension, type: 'pension' },
           ...m.deductions.filter(d => d.type === 'salary_sacrifice'),
-          { name: 'Base Net Sacrifices', amount: netBaseSacrificeMonthlyTotal, type: 'net_sacrifice' },
+          ...mappedNetSacrifices,
           ...m.deductions.filter(d => d.type === 'net_sacrifice')
         ],
         taxFree: varTaxFree
       };
     });
-  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices]);
+  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
 
   // 3. Projections
   const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
@@ -253,6 +308,17 @@ function App() {
     setMonths(n);
   };
 
+  const moveOvertimeItem = (oldMonthIdx, newMonthIdx, id) => {
+    if (oldMonthIdx === newMonthIdx) return;
+    const itemToMove = months[oldMonthIdx].overtime.find(i => i.id === id);
+    if (!itemToMove) return;
+
+    const n = [...months];
+    n[oldMonthIdx].overtime = n[oldMonthIdx].overtime.filter(i => i.id !== id);
+    n[newMonthIdx].overtime.push(itemToMove);
+    setMonths(n);
+  };
+
   const clearCacheAndReload = () => {
     if (window.confirm("Perform hard reset? Your data is safe. Proceed?")) {
       navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
@@ -279,7 +345,27 @@ function App() {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `TaxTracker_Export_${taxYear.replace('/', '-')}.csv`);
+    link.setAttribute("download", `TaxTracker_Monthly_Export_${taxYear.replace('/', '-')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportUnclaimedOT = () => {
+    const headers = ['Month', 'Date', 'Reason', 'Hours', 'Multiplier', 'Estimated Value (£)'];
+    const unclaimed = allOvertime.filter(o => !o.claimed);
+
+    const rows = unclaimed.map(o => {
+      return [o.monthName, o.date, `"${o.reason}"`, o.hours, o.multiplier, calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toFixed(2)];
+    });
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `TaxTracker_Unclaimed_OT_${taxYear.replace('/', '-')}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -333,27 +419,55 @@ function App() {
               <label className="stat-label">Hypothetical Salary (£)</label>
               <input
                 type="range" min={baseSalary * 0.5} max={baseSalary * 2} step={500}
-                value={sandboxSalary}
+                value={sandboxSalary !== null ? sandboxSalary : baseSalary}
                 onChange={(e) => setSandboxSalary(Number(e.target.value))}
                 style={{ width: '100%', accentColor: 'var(--primary)' }}
               />
-              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{sandboxSalary?.toLocaleString()}</div>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxSalary !== null ? sandboxSalary : baseSalary).toLocaleString()}</div>
             </div>
             <div>
               <label className="stat-label">Hypothetical Pension %</label>
               <input
                 type="range" min={0} max={50} step={1}
-                value={sandboxPension}
+                value={sandboxPension !== null ? sandboxPension : pensionPercent}
                 onChange={(e) => setSandboxPension(Number(e.target.value))}
                 style={{ width: '100%', accentColor: 'var(--primary)' }}
               />
-              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>{sandboxPension}%</div>
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>{sandboxPension !== null ? sandboxPension : pensionPercent}%</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <div>
+              <label className="stat-label">Extra Overtime (Annual £)</label>
+              <input
+                type="range" min={0} max={20000} step={500}
+                value={sandboxOvertime !== null ? sandboxOvertime : 0}
+                onChange={(e) => setSandboxOvertime(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--primary)' }}
+              />
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxOvertime !== null ? sandboxOvertime : 0).toLocaleString()}</div>
+            </div>
+            <div>
+              <label className="stat-label">Extra Sacrifice (Annual £)</label>
+              <input
+                type="range" min={0} max={20000} step={500}
+                value={sandboxSacrifice !== null ? sandboxSacrifice : 0}
+                onChange={(e) => setSandboxSacrifice(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--primary)' }}
+              />
+              <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxSacrifice !== null ? sandboxSacrifice : 0).toLocaleString()}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gridColumn: '1 / -1' }}>
               <button
                 onClick={() => {
-                  setBaseSalary(sandboxSalary);
-                  setPensionPercent(sandboxPension);
+                  if (sandboxSalary !== null) setBaseSalary(sandboxSalary);
+                  if (sandboxPension !== null) setPensionPercent(sandboxPension);
+
+                  if (sandboxOvertime > 0) {
+                    setBaseEnhancements([...baseEnhancements, { id: Date.now().toString() + 'ot', name: 'Sandbox OT', amount: sandboxOvertime, frequency: 'annual', type: 'income' }]);
+                  }
+                  if (sandboxSacrifice > 0) {
+                    setBaseSacrifices([...baseSacrifices, { id: Date.now().toString() + 'sac', name: 'Sandbox Sacrifice', amount: sandboxSacrifice, frequency: 'annual', type: 'salary_sacrifice' }]);
+                  }
+
                   setSandboxMode(false);
                 }}
                 className="btn-primary"
@@ -571,7 +685,18 @@ function App() {
               </div>
 
               {filteredOT.map(o => (
-                <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+                <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    <select
+                      value={o.monthIdx}
+                      onChange={(e) => moveOvertimeItem(o.monthIdx, Number(e.target.value), o.id)}
+                      className="input-field"
+                      style={{ fontSize: '0.75rem', padding: '0.2rem', width: 'auto', background: 'rgba(255,255,255,0.1)' }}
+                    >
+                      {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                    </select>
+                    <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Month Assignment</span>
+                  </div>
                   <div className="ot-row">
                     <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
                       {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
@@ -584,6 +709,7 @@ function App() {
                       onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'hours', v))}
                       className="input-field"
                     />
+
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <select value={o.multiplier} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'multiplier', Number(e.target.value))} className="input-field" style={{ fontSize: '0.8rem', padding: '0.2rem' }}>
                         <option value={1.5}>1.5x</option><option value={2}>2x</option>
@@ -595,6 +721,11 @@ function App() {
                 </div>
               ))}
               {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged.</p>}
+              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+                <button onClick={exportUnclaimedOT} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
+                  <Download size={14} style={{ marginRight: '0.5rem' }} /> Export Unclaimed OT (.csv)
+                </button>
+              </div>
             </div>
           </div>
         )}

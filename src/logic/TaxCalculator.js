@@ -27,11 +27,20 @@ const CONSTANTS = {
 };
 
 const STUDENT_LOAN_PLANS = {
-    'plan1': { threshold: 24990, rate: 0.09 },
-    'plan2': { threshold: 27295, rate: 0.09 },
-    'plan4': { threshold: 31395, rate: 0.09 },
-    'plan5': { threshold: 25000, rate: 0.09 },
-    'pgl': { threshold: 21000, rate: 0.06 }
+    '2024/25': {
+        'plan1': { threshold: 24990, rate: 0.09 },
+        'plan2': { threshold: 27295, rate: 0.09 },
+        'plan4': { threshold: 31395, rate: 0.09 },
+        'plan5': { threshold: 25000, rate: 0.09 },
+        'pgl': { threshold: 21000, rate: 0.06 }
+    },
+    '2025/26': {
+        'plan1': { threshold: 25725, rate: 0.09 }, // 25/26 threshold
+        'plan2': { threshold: 28310, rate: 0.09 }, // 25/26 threshold
+        'plan4': { threshold: 32345, rate: 0.09 }, // 25/26 threshold
+        'plan5': { threshold: 25000, rate: 0.09 },
+        'pgl': { threshold: 21000, rate: 0.06 }
+    }
 };
 
 export const parseTaxCode = (code) => {
@@ -120,8 +129,11 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     let studentLoan = 0;
     if (options.studentLoanPlans && options.studentLoanPlans.length > 0) {
         const grossForSL = annualGross; // SL is calculated on gross after pension usually? Depends on pension type. Using Gross for simplicity as per common HMRC tools.
+        const taxYear = options.taxYear || '2025/26';
+        const yearSLConfig = STUDENT_LOAN_PLANS[taxYear] || STUDENT_LOAN_PLANS['2025/26'];
+
         options.studentLoanPlans.forEach(planKey => {
-            const plan = STUDENT_LOAN_PLANS[planKey];
+            const plan = yearSLConfig[planKey];
             if (plan && grossForSL > plan.threshold) {
                 studentLoan += (grossForSL - plan.threshold) * plan.rate;
             }

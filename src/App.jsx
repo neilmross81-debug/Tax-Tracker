@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV11_1');
+    const saved = localStorage.getItem('taxTrackerDataV11_2');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV11_1', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV11_2', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -207,7 +207,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.1</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.2</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -394,7 +394,6 @@ function App() {
                     </div>
                     <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
                   </div>
-                  <div style={{ fontSize: '0.7rem', opacity: 0.4, marginTop: '0.25rem' }}>Log month: {o.monthName}</div>
                 </div>
               ))}
               {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged.</p>}

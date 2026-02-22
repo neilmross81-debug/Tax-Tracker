@@ -107,7 +107,7 @@ select.input-field {
   background: rgba(255, 255, 255, 0.1);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   #root {
     padding: 1rem;
     padding-bottom: 7rem;
@@ -117,25 +117,37 @@ select.input-field {
     grid-template-columns: 1fr;
   }
 
-  .stat-value {
-    font-size: 1.5rem;
-  }
-
-  /* Fix overlapping by allowing wrap and better spacing */
+  /* Responsive rows for mobile */
   .income-line,
   .overtime-line {
-    display: flex !important;
-    flex-direction: column;
-    gap: 0.5rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--glass-border);
     margin-bottom: 1rem;
+    display: block !important;
   }
 
-  .income-line>*,
-  .overtime-line>* {
+  .ot-row {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .ot-row>* {
     width: 100% !important;
   }
+
+  /* Specific fix for the button/check row on mobile */
+  .ot-row .btn-icon {
+    justify-content: flex-start;
+  }
+}
+
+/* Desktop OT Row */
+.ot-row {
+  display: grid;
+  grid-template-columns: 24px 1.2fr 1.5fr 1fr 1fr 24px;
+  gap: 0.6rem;
+  align-items: center;
 }
 
 .nav-bar {

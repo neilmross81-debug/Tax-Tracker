@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV10');
+    const saved = localStorage.getItem('taxTrackerDataV10_1');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV10', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV10_1', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -207,7 +207,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v10.0</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v10.1</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -338,7 +338,7 @@ function App() {
 
               {filteredOT.map(o => (
                 <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1.2fr 1.5fr 1fr 1fr 24px', gap: '0.6rem', alignItems: 'center' }}>
+                  <div className="ot-row">
                     <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
                       {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
                     </button>

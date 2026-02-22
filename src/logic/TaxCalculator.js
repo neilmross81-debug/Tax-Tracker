@@ -1,6 +1,6 @@
 /**
- * UK Tax Calculator 2025/26 - v9.5 Logic
- * Focus: Adjusted Net Income (Pension-aware) and Isolated Projections.
+ * UK Tax Calculator 2025/26 - v10.0 Logic
+ * Fixes: Monthly scaling bug, Adjusted Net Income (ANI) alignment.
  */
 
 const round = (val) => Math.round(val * 100) / 100;
@@ -21,11 +21,14 @@ export const parseTaxCode = (code) => {
     return 12570;
 };
 
-// Recommends tax code based on Adjusted Net Income (Gross - Pension - Gross Sacrifices)
-export const recommendTaxCode = (adjustedNetIncome) => {
-    if (adjustedNetIncome > 125140) return 'D0';
-    if (adjustedNetIncome > 100000) {
-        const excess = adjustedNetIncome - 100000;
+/**
+ * Recommends tax code based on Adjusted Net Income (ANI).
+ * ANI = Total Gross - Pension - Gross Sacrifices.
+ */
+export const recommendTaxCode = (ani) => {
+    if (ani > 125140) return 'D0';
+    if (ani > 100000) {
+        const excess = ani - 100000;
         const reduction = Math.min(12570, Math.floor(excess / 2));
         const newAllowance = 12570 - reduction;
         if (newAllowance <= 0) return '0T';
@@ -34,15 +37,17 @@ export const recommendTaxCode = (adjustedNetIncome) => {
     return '1257L';
 };
 
+/**
+ * Calculates tax based on ANNUAL figures.
+ */
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0) => {
-    // salarySacrifice here refers specifically to GROSS sacrifices (pre-tax)
-    // taxableIncome is Adjusted Net Income for personal allowance purposes
+    // Adjusted Net Income (ANI) for personal allowance purposes
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
 
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
-    // HMRC Tapered Allowance Logic (based on Adjusted Net Income)
+    // HMRC Tapered Allowance Logic (based on ANI)
     if (taxableIncome > 100000 && personalAllowance > 0) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
@@ -84,34 +89,26 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
 
     return {
         gross: round(annualGross),
-        taxableIncome: round(taxableIncome), // This is Adjusted Net Income
+        taxableIncome: round(taxableIncome), // Adjusted Net Income
         personalAllowance: round(personalAllowance),
         incomeTax: round(incomeTax),
         ni: round(ni),
         pensionContribution: round(pensionContribution),
         salarySacrifice: round(salarySacrifice),
         netDeductions: round(netDeductions),
-        takeHome: round(taxableIncome - incomeTax - ni - netDeductions),
+        annualTakeHome: round(taxableIncome - incomeTax - ni - netDeductions),
         monthlyTakeHome: round((taxableIncome - incomeTax - ni - netDeductions) / 12)
     };
 };
 
-export const calculateOvertime = (annualSalary, contractedHours, otHours, multiplier) => {
-    if (!contractedHours || contractedHours <= 0) return 0;
-    const hourlyRate = (annualSalary / 52) / contractedHours;
-    return round(hourlyRate * (otHours || 0) * multiplier);
-};
-
-export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode, baseSalary) => {
-    // CurrentMonthIndex is 0-indexed (0 = April)
-
+export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode) => {
     let ytdGross = 0;
     let ytdPension = 0;
     let ytdSacrifice = 0;
     let ytdNetDeductions = 0;
     let ytdTaxFree = 0;
 
-    // 1. Sum up YTD Actuals (including the current month)
+    // 1. Sum up YTD Actuals
     for (let i = 0; i <= currentMonthIndex; i++) {
         const m = monthsActualData[i];
         ytdGross += m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
@@ -121,14 +118,14 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
         ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
     }
 
-    // 2. Project remaining months using ONLY futureBaseData (recurring settings)
-    const remainingCount = 11 - currentMonthIndex;
-    if (remainingCount > 0) {
-        ytdGross += (futureBaseData.gross * remainingCount);
-        ytdPension += (futureBaseData.pension * remainingCount);
-        ytdSacrifice += (futureBaseData.grossSacrifice * remainingCount);
-        ytdNetDeductions += (futureBaseData.netSacrifice * remainingCount);
-        ytdTaxFree += (futureBaseData.taxFree * remainingCount);
+    // 2. Project future using recurring base
+    const remaining = 11 - currentMonthIndex;
+    if (remaining > 0) {
+        ytdGross += (futureBaseData.gross * remaining);
+        ytdPension += (futureBaseData.pension * remaining);
+        ytdSacrifice += (futureBaseData.grossSacrifice * remaining);
+        ytdNetDeductions += (futureBaseData.netSacrifice * remaining);
+        ytdTaxFree += (futureBaseData.taxFree * remaining);
     }
 
     const taxResults = calculateTax(ytdGross, ytdPension, ytdSacrifice, taxCode, ytdNetDeductions);
@@ -136,24 +133,21 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
     return {
         ...taxResults,
         projectedTaxFree: round(ytdTaxFree),
-        finalTakeHome: round(taxResults.takeHome + ytdTaxFree)
+        finalTakeHome: round(taxResults.annualTakeHome + ytdTaxFree)
     };
 };
 
-export const getTaxTrapAdvice = (adjustedNetIncome, currentPensionPercent, annualGross) => {
-    if (adjustedNetIncome > 100000 && adjustedNetIncome < 125140) {
-        const excess = adjustedNetIncome - 100000;
+export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross) => {
+    if (ani > 100000 && ani < 125140) {
+        const excess = ani - 100000;
         const allowanceLost = excess / 2;
-
-        // Required additional relief (pension or sacrifice) to get back to £100k
-        const requiredAdditionalRelief = excess;
-        const percentageIncrease = (requiredAdditionalRelief / annualGross) * 100;
+        const percentageIncrease = (excess / annualGross) * 100;
         const suggestedPension = Math.ceil(currentPensionPercent + percentageIncrease);
 
         return {
             active: true,
-            message: `You are in the 60% Tax Trap! Your Adjusted Net Income is £${round(adjustedNetIncome).toLocaleString()}.`,
-            advice: `Increase your pension contribution from ${currentPensionPercent}% to ${suggestedPension}% to reclaim £${round(allowanceLost).toLocaleString()} of Personal Allowance.`
+            message: `Adjusted Net Income: £${round(ani).toLocaleString()} is in the 60% Tax Trap bracket.`,
+            advice: `Consider raising pension to ${suggestedPension}% to reclaim £${round(allowanceLost).toLocaleString()} of allowance.`
         };
     }
     return { active: false };

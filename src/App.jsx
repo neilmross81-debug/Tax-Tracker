@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard } from 'lucide-react';
-import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime } from './logic/TaxCalculator';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square } from 'lucide-react';
+import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
 function App() {
   // --- UI State ---
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, overtime, config
+  const [otFilterClaimed, setOtFilterClaimed] = useState('all'); // all, claimed, unclaimed
+  const [otFilterMonth, setOtFilterMonth] = useState('all');
 
   // --- Persistent State ---
   const [taxCode, setTaxCode] = useState('1257L');
@@ -23,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV7');
+    const saved = localStorage.getItem('taxTrackerDataV8');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -37,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV7', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV8', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -49,7 +50,7 @@ function App() {
   };
 
   // --- Calculations ---
-  const getFullMonthData = () => {
+  const fullData = useMemo(() => {
     const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
     const baseSacrificeMonthlyTotal = baseSacrifices.reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
     const monthlyBaseSalary = baseSalary / 12;
@@ -57,6 +58,7 @@ function App() {
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
       const monthlyVariableIncome = m.income.reduce((s, i) => s + Number(i.amount), 0);
+
       const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + monthlyVariableIncome;
       const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
 
@@ -69,16 +71,16 @@ function App() {
         ],
         deductions: [
           { name: 'Base Sacrifices', amount: baseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
-          { name: 'Pension', amount: pension, type: 'pension' },
+          { name: 'Pension arrangement', amount: pension, type: 'pension' },
           ...m.deductions
         ]
       };
     });
-  };
+  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices]);
 
-  const fullData = getFullMonthData();
   const projection = projectAnnual(fullData, selectedMonthIdx, taxCode, baseSalary);
   const currentMonthData = fullData[selectedMonthIdx];
+
   const monthlyResults = calculateTax(
     currentMonthData.income.reduce((s, i) => s + Number(i.amount), 0),
     currentMonthData.deductions.reduce((s, i) => s + (i.type === 'pension' ? Number(i.amount) : 0), 0),
@@ -89,13 +91,31 @@ function App() {
   const monthlyTaxFree = months[selectedMonthIdx].deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + Number(d.amount), 0);
   const totalMonthlyNet = monthlyResults.monthlyTakeHome + monthlyTaxFree;
 
-  // YTD Overtime
-  const ytdOTTotal = months.reduce((acc, m) =>
-    acc + m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0)
-    , 0);
-  const ytdOTHours = months.reduce((acc, m) =>
-    acc + m.overtime.reduce((s, o) => s + Number(o.hours), 0)
-    , 0);
+  // Overtime Processing
+  const allOvertime = useMemo(() => {
+    return months.flatMap((m, idx) => m.overtime.map(o => ({ ...o, monthIdx: idx, monthName: MONTHS[idx] })));
+  }, [months]);
+
+  const ytdOTTotal = allOvertime.reduce((acc, o) => acc + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+  const ytdOTHours = allOvertime.reduce((acc, o) => acc + Number(o.hours), 0);
+
+  const filteredOT = allOvertime.filter(o => {
+    if (otFilterClaimed === 'claimed' && !o.claimed) return false;
+    if (otFilterClaimed === 'unclaimed' && o.claimed) return false;
+    if (otFilterMonth !== 'all' && Number(otFilterMonth) !== o.monthIdx) return false;
+    return true;
+  }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Tax Recommendation
+  const recommendedCode = promoteRecommendedCode(projection.taxableIncome + projection.pensionContribution, taxCode);
+  const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
+
+  function promoteRecommendedCode(taxable, current) {
+    // Very high level recommendation
+    if (taxable > 125140) return 'D0';
+    if (taxable > 100000) return '0T'; // Simplification for user
+    return '1257L';
+  }
 
   // --- Handlers ---
   const addBaseItem = (type) => {
@@ -119,7 +139,7 @@ function App() {
   const addMonthItem = (monthIdx, type) => {
     const n = [...months];
     const newItem = type === 'overtime'
-      ? { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], reason: 'Work', hours: 0, multiplier: 1.5 }
+      ? { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], reason: 'Work', hours: 0, multiplier: 1.5, claimed: false }
       : { id: Date.now().toString(), name: 'Item', amount: 0, type: type === 'deductions' ? 'salary_sacrifice' : 'other' };
     n[monthIdx][type].push(newItem);
     setMonths(n);
@@ -138,10 +158,8 @@ function App() {
   };
 
   const clearCacheAndReload = () => {
-    if (window.confirm("Perform hard reset? Your data is saved. Proceed?")) {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
-      }
+    if (window.confirm("Perform hard reset? Your data is safe. Proceed?")) {
+      navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
       window.location.reload(true);
     }
   };
@@ -149,7 +167,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v7.0 - Multi-Tab UI</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v8.0</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -168,37 +186,68 @@ function App() {
           <div className="dashboard-grid">
             <div className="glass-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <h2 style={{ margin: 0 }}>Monthly Split</h2>
+                <h2 style={{ margin: 0 }}>Monthly Summary</h2>
                 <select className="input-field" style={{ width: 'auto' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
                   {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
               </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                  <span>Base Salary (Gross):</span>
+                  <span>£{(baseSalary / 12).toFixed(2)}</span>
+                </div>
+                {baseEnhancements.map(e => (
+                  <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.2rem', opacity: 0.7 }}>
+                    <span>{e.name}:</span>
+                    <span>£{getMonthlyValue(e.amount, e.frequency).toFixed(2)}</span>
+                  </div>
+                ))}
+                {months[selectedMonthIdx].overtime.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.2rem', opacity: 0.7 }}>
+                    <span>Overtime Total:</span>
+                    <span>£{months[selectedMonthIdx].overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
               <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Variable Items <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer' }} /></div>
               {months[selectedMonthIdx].deductions.map(d => (
-                <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 24px', gap: '0.4rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                <div key={d.id} className="income-line">
                   <input placeholder="Name" value={d.name} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'name', e.target.value)} className="input-field" />
-                  <input type="number" placeholder="Amt" value={d.amount} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', Number(e.target.value))} className="input-field" />
-                  <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
-                    <option value="salary_sacrifice">Sacrifice</option><option value="tax_free">Expense (Tax Free)</option><option value="income">Income</option>
-                  </select>
-                  <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <input type="number" placeholder="Amt" value={d.amount} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', Number(e.target.value))} className="input-field" />
+                    <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
+                      <option value="salary_sacrifice">Sacrifice</option><option value="tax_free">Expense</option><option value="income">Income</option>
+                    </select>
+                    <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
+                  </div>
                 </div>
               ))}
-              <div style={{ marginTop: '2rem' }}>
-                <h3 style={{ fontSize: '0.9rem', opacity: 0.6 }}>Month Summary</h3>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Net Pay:</span><strong>£{totalMonthlyNet.toLocaleString()}</strong></div>
+              <div style={{ marginTop: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="stat-label" style={{ margin: 0 }}>Estimated Net Pay:</span>
+                  <strong style={{ fontSize: '1.5rem', color: 'var(--success)' }}>£{totalMonthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </div>
               </div>
             </div>
 
             <div className="glass-card">
               <h2 style={{ margin: 0 }}>Annual Forecast</h2>
-              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '3.5rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '2rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', opacity: 0.7 }}>
-                <div><div className="stat-label">Taxable Income</div>£{projection.taxableIncome.toLocaleString()}</div>
-                <div><div className="stat-label">Total Tax/NI</div>£{(projection.incomeTax + projection.ni).toLocaleString()}</div>
+                <div><div className="stat-label">Taxable Income</div>£{projection.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div><div className="stat-label">Total Tax/NI</div>£{(projection.incomeTax + projection.ni).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <hr style={{ opacity: 0.1, margin: '1.5rem 0' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}><span>Total OT (YTD):</span><strong>£{ytdOTTotal.toLocaleString()}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}><span>Total OT (Gross):</span><strong>£{ytdOTTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
+              <div style={{ marginTop: '1.5rem' }}>
+                <div className="stat-label">Recommended Tax Code</div>
+                <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ color: isCodeCorrect ? 'var(--success)' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
+                  {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Suggest: {recommendedCode}</span>}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -206,39 +255,57 @@ function App() {
         {activeTab === 'overtime' && (
           <div>
             <div className="glass-card" style={{ marginBottom: '2rem' }}>
-              <h2 style={{ margin: 0 }}>YTD Overtime Logs</h2>
+              <h2 style={{ margin: 0 }}>Overtime Summary</h2>
               <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '0.5rem' }}>
-                  <div className="stat-label">Total OT Pay</div>
-                  <div className="stat-value" style={{ color: 'var(--primary)' }}>£{ytdOTTotal.toLocaleString()}</div>
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '0.5rem' }}>
+                  <div className="stat-label">YTD Earned</div>
+                  <div className="stat-value" style={{ color: 'var(--primary)' }}>£{ytdOTTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </div>
-                <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '0.5rem' }}>
-                  <div className="stat-label">Total OT Hours</div>
-                  <div className="stat-value">{ytdOTHours} hrs</div>
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '0.5rem' }}>
+                  <div className="stat-label">Unclaimed</div>
+                  <div className="stat-value" style={{ color: 'var(--error)' }}>£{allOvertime.filter(o => !o.claimed).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </div>
               </div>
             </div>
 
             <div className="glass-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
-                <h2 style={{ margin: 0 }}>Monthly OT Log</h2>
-                <select className="input-field" style={{ width: 'auto' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
-                  {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-                </select>
-              </div>
-              <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Add Line <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'overtime')} style={{ cursor: 'pointer' }} /></div>
-              {months[selectedMonthIdx].overtime.map(o => (
-                <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 0.7fr 0.8fr 24px', gap: '0.4rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                  <input type="date" value={o.date} onChange={(e) => updateMonthItem(selectedMonthIdx, 'overtime', o.id, 'date', e.target.value)} className="input-field" style={{ fontSize: '0.8rem' }} />
-                  <input placeholder="Reason" value={o.reason} onChange={(e) => updateMonthItem(selectedMonthIdx, 'overtime', o.id, 'reason', e.target.value)} className="input-field" />
-                  <input type="number" placeholder="Hrs" value={o.hours} onChange={(e) => updateMonthItem(selectedMonthIdx, 'overtime', o.id, 'hours', Number(e.target.value))} className="input-field" />
-                  <select value={o.multiplier} onChange={(e) => updateMonthItem(selectedMonthIdx, 'overtime', o.id, 'multiplier', Number(e.target.value))} className="input-field">
-                    <option value={1.5}>1.5x</option><option value={2}>2x</option>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center', gap: '1rem' }}>
+                <h2 style={{ margin: 0 }}>Overtime Tracker</h2>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select className="input-field" style={{ width: 'auto' }} value={otFilterMonth} onChange={(e) => setOtFilterMonth(e.target.value)}>
+                    <option value="all">All Months</option>
+                    {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                   </select>
-                  <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
+                  <select className="input-field" style={{ width: 'auto' }} value={otFilterClaimed} onChange={(e) => setOtFilterClaimed(e.target.value)}>
+                    <option value="all">Status: All</option>
+                    <option value="claimed">Claimed</option>
+                    <option value="unclaimed">Unclaimed</option>
+                  </select>
+                  <button className="btn-primary" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')}><Plus size={20} /></button>
+                </div>
+              </div>
+
+              {filteredOT.map(o => (
+                <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1fr 1fr 24px', gap: '0.6rem', alignItems: 'center' }}>
+                    <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
+                      {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
+                    </button>
+                    <input type="date" value={o.date} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'date', e.target.value)} className="input-field" style={{ fontSize: '0.8rem' }} />
+                    <input placeholder="Reason" value={o.reason} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'reason', e.target.value)} className="input-field" />
+                    <input type="number" placeholder="Hrs" value={o.hours} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'hours', Number(e.target.value))} className="input-field" />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <select value={o.multiplier} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'multiplier', Number(e.target.value))} className="input-field" style={{ fontSize: '0.8rem', padding: '0.2rem' }}>
+                        <option value={1.5}>1.5x</option><option value={2}>2x</option>
+                      </select>
+                      <span style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toFixed(2)}</span>
+                    </div>
+                    <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', opacity: 0.4, marginTop: '0.25rem' }}>Log month: {o.monthName}</div>
                 </div>
               ))}
-              {months[selectedMonthIdx].overtime.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged for {MONTHS[selectedMonthIdx]}</p>}
+              {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime matches filters.</p>}
             </div>
           </div>
         )}
@@ -249,34 +316,41 @@ function App() {
             <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
               <div><label className="stat-label">Annual Salary</label><input type="number" value={baseSalary} onChange={(e) => setBaseSalary(Number(e.target.value))} className="input-field" /></div>
               <div><label className="stat-label">Contracted Hrs(wk)</label><input type="number" value={contractedHours} onChange={(e) => setContractedHours(Number(e.target.value))} className="input-field" /></div>
-              <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
-              <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => setPensionPercent(Number(e.target.value))} className="input-field" /></div>
+              <div>
+                <label className="stat-label">Tax Code</label>
+                <input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" style={{ color: isCodeCorrect ? 'white' : 'var(--error)', fontWeight: isCodeCorrect ? 'normal' : 'bold' }} />
+              </div>
+              <div><label className="stat-label">Base Pension % arrangement</label><input type="number" value={pensionPercent} onChange={(e) => setPensionPercent(Number(e.target.value))} className="input-field" /></div>
             </div>
 
             <div className="dashboard-grid">
               <div>
                 <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
                 {baseEnhancements.map(e => (
-                  <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 24px', gap: '0.4rem', marginBottom: '0.4rem', alignItems: 'center' }}>
+                  <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
                     <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
-                    <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => updateBaseItem('enhancement', e.id, 'amount', Number(v.target.value))} className="input-field" />
-                    <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
-                      <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                    </select>
-                    <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => updateBaseItem('enhancement', e.id, 'amount', Number(v.target.value))} className="input-field" />
+                      <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
+                        <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                      </select>
+                      <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 ))}
               </div>
               <div>
                 <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
                 {baseSacrifices.map(d => (
-                  <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 24px', gap: '0.4rem', marginBottom: '0.4rem', alignItems: 'center' }}>
+                  <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
                     <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
-                    <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => updateBaseItem('sacrifice', d.id, 'amount', Number(v.target.value))} className="input-field" />
-                    <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
-                      <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                    </select>
-                    <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => updateBaseItem('sacrifice', d.id, 'amount', Number(v.target.value))} className="input-field" />
+                      <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
+                        <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                      </select>
+                      <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -299,7 +373,7 @@ function App() {
         </div>
         <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
-          <span>Overtime</span>
+          <span>OT Log</span>
         </div>
         <div className={`nav-item ${activeTab === 'config' ? 'active' : ''}`} onClick={() => setActiveTab('config')}>
           <Settings size={20} />

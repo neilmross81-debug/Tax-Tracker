@@ -1,13 +1,13 @@
 :root {
   --primary: #6366f1;
   --primary-hover: #4f46e5;
-  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --bg-gradient: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.15);
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --success: #22c55e;
-  --error: #ef4444;
+  --text-muted: #cbd5e1;
+  --success: #4ade80;
+  --error: #f87171;
 }
 
 body {
@@ -26,17 +26,17 @@ body {
 
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: 1rem;
   padding: 1.5rem;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
   transition: transform 0.2s ease;
 }
 
 .glass-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
 }
 
 .btn-primary {
@@ -55,39 +55,86 @@ body {
 }
 
 .input-field {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--glass-border);
   color: white;
   padding: 0.75rem;
   border-radius: 0.5rem;
   width: 100%;
   box-sizing: border-box;
+  font-size: 1rem;
+}
+
+select.input-field {
+  font-size: 1.1rem;
+  cursor: pointer;
 }
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.5rem;
   margin-top: 2rem;
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.75rem;
   font-weight: 700;
   margin: 0.5rem 0;
 }
 
 .stat-label {
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.btn-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 @media (max-width: 640px) {
   #root {
     padding: 1rem;
-    padding-bottom: 6rem;
+    padding-bottom: 7rem;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
+
+  /* Fix overlapping by allowing wrap and better spacing */
+  .income-line,
+  .overtime-line {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: 1rem;
+  }
+
+  .income-line>*,
+  .overtime-line>* {
+    width: 100% !important;
   }
 }
 

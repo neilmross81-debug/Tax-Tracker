@@ -3,7 +3,9 @@
  * Handles Tax Codes, Overtime Calculations, Tax-Free Expenses, and Base Enhancements.
  */
 
-const parseTaxCode = (code) => {
+const round = (val) => Math.round(val * 100) / 100;
+
+export const parseTaxCode = (code) => {
     const cleanCode = code.toUpperCase().trim();
     if (cleanCode === 'BR') return 0;
     if (cleanCode === 'D0') return -999999;
@@ -17,6 +19,18 @@ const parseTaxCode = (code) => {
         return value;
     }
     return 12570;
+};
+
+export const recommendTaxCode = (projectedGross, projectedPension) => {
+    const taxable = projectedGross - projectedPension;
+    if (taxable > 125140) return 'D0';
+    if (taxable > 100000) {
+        // Reduced allowance
+        const deduction = Math.floor((taxable - 100000) / 20) * 10;
+        const remaining = Math.max(0, 1257 - (deduction / 10));
+        return remaining === 0 ? '0T' : `${remaining}L`;
+    }
+    return '1257L';
 };
 
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L') => {
@@ -65,22 +79,22 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     }
 
     return {
-        gross: annualGross,
-        taxableIncome,
-        personalAllowance,
-        incomeTax,
-        ni,
-        pensionContribution,
-        salarySacrifice,
-        takeHome: taxableIncome - incomeTax - ni,
-        monthlyTakeHome: (taxableIncome - incomeTax - ni) / 12
+        gross: round(annualGross),
+        taxableIncome: round(taxableIncome),
+        personalAllowance: round(personalAllowance),
+        incomeTax: round(incomeTax),
+        ni: round(ni),
+        pensionContribution: round(pensionContribution),
+        salarySacrifice: round(salarySacrifice),
+        takeHome: round(taxableIncome - incomeTax - ni),
+        monthlyTakeHome: round((taxableIncome - incomeTax - ni) / 12)
     };
 };
 
 export const calculateOvertime = (annualSalary, contractedHours, otHours, multiplier) => {
     if (!contractedHours || contractedHours <= 0) return 0;
     const hourlyRate = (annualSalary / 52) / contractedHours;
-    return hourlyRate * otHours * multiplier;
+    return round(hourlyRate * otHours * multiplier);
 };
 
 export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary) => {
@@ -100,10 +114,6 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
     const remaining = 11 - currentMonthIndex;
     const curr = monthsData[currentMonthIndex];
 
-    // Project based on current month's VARIABLE items (excluding base items which are handled in App.jsx's getFullMonthData)
-    // Actually, getFullMonthData ALREADY includes base items.
-    // So we just project the current month's "full" state forward.
-
     const monthlyGross = curr.income.reduce((s, item) => s + Number(item.amount), 0);
     const monthlyPension = curr.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
     const monthlySacrifice = curr.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);
@@ -118,8 +128,8 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
 
     return {
         ...taxResults,
-        projectedTaxFree,
-        finalTakeHome: taxResults.takeHome + projectedTaxFree
+        projectedTaxFree: round(projectedTaxFree),
+        finalTakeHome: round(taxResults.takeHome + projectedTaxFree)
     };
 };
 
@@ -130,8 +140,8 @@ export const getTaxTrapAdvice = (projectedTaxableIncome) => {
         const taxCost = allowanceLost * 0.40;
         return {
             active: true,
-            message: `You are in the 60% Tax Trap! You've lost £${allowanceLost.toLocaleString()} of Personal Allowance.`,
-            advice: `Increasing pension/sacrifice by £${excess.toLocaleString()} saves £${(taxCost + (excess * 0.4)).toLocaleString()} in tax.`
+            message: `You are in the 60% Tax Trap! You've lost £${round(allowanceLost).toLocaleString()} of Personal Allowance.`,
+            advice: `Increasing pension/sacrifice by £${round(excess).toLocaleString()} saves £${round(taxCost + (excess * 0.4)).toLocaleString()} in tax.`
         };
     }
     return { active: false };

@@ -1,6 +1,6 @@
 /**
- * UK Tax Calculator 2025/26 - Advanced Features
- * Handles Tax Codes, Overtime Calculations, Tax-Free Expenses, and Base Enhancements.
+ * UK Tax Calculator 2025/26 - v9.0 Logic Refinement
+ * Handles Graduated Tax Codes, Pension Advice (%), and Net vs Gross Sacrifices.
  */
 
 const round = (val) => Math.round(val * 100) / 100;
@@ -21,24 +21,26 @@ export const parseTaxCode = (code) => {
     return 12570;
 };
 
-export const recommendTaxCode = (projectedGross, projectedPension) => {
-    const taxable = projectedGross - projectedPension;
-    if (taxable > 125140) return 'D0';
-    if (taxable > 100000) {
-        // Reduced allowance
-        const deduction = Math.floor((taxable - 100000) / 20) * 10;
-        const remaining = Math.max(0, 1257 - (deduction / 10));
-        return remaining === 0 ? '0T' : `${remaining}L`;
+export const recommendTaxCode = (taxableIncome) => {
+    if (taxableIncome > 125140) return 'D0';
+    if (taxableIncome > 100000) {
+        const excess = taxableIncome - 100000;
+        const reduction = Math.min(12570, Math.floor(excess / 2));
+        const newAllowance = 12570 - reduction;
+        if (newAllowance <= 0) return '0T';
+        return `${Math.floor(newAllowance / 10)}L`;
     }
     return '1257L';
 };
 
-export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L') => {
+export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0) => {
+    // salarySacrifice here refers specifically to GROSS sacrifices
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
 
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
+    // HMRC Tapered Allowance Logic
     if (taxableIncome > 100000 && personalAllowance > 0) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
@@ -86,21 +88,23 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
         ni: round(ni),
         pensionContribution: round(pensionContribution),
         salarySacrifice: round(salarySacrifice),
-        takeHome: round(taxableIncome - incomeTax - ni),
-        monthlyTakeHome: round((taxableIncome - incomeTax - ni) / 12)
+        netDeductions: round(netDeductions),
+        takeHome: round(taxableIncome - incomeTax - ni - netDeductions),
+        monthlyTakeHome: round((taxableIncome - incomeTax - ni - netDeductions) / 12)
     };
 };
 
 export const calculateOvertime = (annualSalary, contractedHours, otHours, multiplier) => {
     if (!contractedHours || contractedHours <= 0) return 0;
     const hourlyRate = (annualSalary / 52) / contractedHours;
-    return round(hourlyRate * otHours * multiplier);
+    return round(hourlyRate * (otHours || 0) * multiplier);
 };
 
 export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary) => {
     let ytdGross = 0;
     let ytdPension = 0;
     let ytdSacrifice = 0;
+    let ytdNetDeductions = 0;
     let ytdTaxFree = 0;
 
     for (let i = 0; i <= currentMonthIndex; i++) {
@@ -108,6 +112,7 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
         ytdGross += m.income.reduce((s, item) => s + Number(item.amount), 0);
         ytdPension += m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
         ytdSacrifice += m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);
+        ytdNetDeductions += m.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount) : 0), 0);
         ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount) : 0), 0);
     }
 
@@ -117,14 +122,16 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
     const monthlyGross = curr.income.reduce((s, item) => s + Number(item.amount), 0);
     const monthlyPension = curr.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
     const monthlySacrifice = curr.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);
+    const monthlyNetDeductions = curr.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount) : 0), 0);
     const monthlyTaxFree = curr.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount) : 0), 0);
 
     const projectedGross = ytdGross + (monthlyGross * remaining);
     const projectedPension = ytdPension + (monthlyPension * remaining);
     const projectedSacrifice = ytdSacrifice + (monthlySacrifice * remaining);
+    const projectedNetDeductions = ytdNetDeductions + (monthlyNetDeductions * remaining);
     const projectedTaxFree = ytdTaxFree + (monthlyTaxFree * remaining);
 
-    const taxResults = calculateTax(projectedGross, projectedPension, projectedSacrifice, taxCode);
+    const taxResults = calculateTax(projectedGross, projectedPension, projectedSacrifice, taxCode, projectedNetDeductions);
 
     return {
         ...taxResults,
@@ -133,15 +140,21 @@ export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary
     };
 };
 
-export const getTaxTrapAdvice = (projectedTaxableIncome) => {
+export const getTaxTrapAdvice = (projectedTaxableIncome, currentPensionPercent, annualGross) => {
     if (projectedTaxableIncome > 100000 && projectedTaxableIncome < 125140) {
         const excess = projectedTaxableIncome - 100000;
         const allowanceLost = excess / 2;
-        const taxCost = allowanceLost * 0.40;
+        const taxCost = (allowanceLost * 0.40) + (excess * 0.40); // 40% on lost allowance + 40% on excess
+
+        // Calculate required percentage increase
+        const requiredRelief = excess;
+        const percentageIncrease = (requiredRelief / annualGross) * 100;
+        const suggestedPension = Math.ceil(currentPensionPercent + percentageIncrease);
+
         return {
             active: true,
             message: `You are in the 60% Tax Trap! You've lost £${round(allowanceLost).toLocaleString()} of Personal Allowance.`,
-            advice: `Increasing pension/sacrifice by £${round(excess).toLocaleString()} saves £${round(taxCost + (excess * 0.4)).toLocaleString()} in tax.`
+            advice: `Increase your pension contribution from ${currentPensionPercent}% to ${suggestedPension}% to reclaim your allowance.`
         };
     }
     return { active: false };

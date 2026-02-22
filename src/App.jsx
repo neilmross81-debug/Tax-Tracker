@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV8');
+    const saved = localStorage.getItem('taxTrackerDataV9');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,58 +38,81 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV8', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV9', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
   const getMonthlyValue = (amount, frequency) => {
-    if (frequency === 'monthly') return Number(amount);
-    if (frequency === 'annual') return Number(amount) / 12;
-    if (frequency === 'hourly') return (Number(amount) * contractedHours * 52) / 12;
-    return Number(amount);
+    if (frequency === 'monthly') return Number(amount) || 0;
+    if (frequency === 'annual') return (Number(amount) || 0) / 12;
+    if (frequency === 'hourly') return ((Number(amount) || 0) * contractedHours * 52) / 12;
+    return Number(amount) || 0;
+  };
+
+  // Improved numeric input handler to prevent "0100" issues
+  const handleNumericInput = (val, setter) => {
+    if (val === '') {
+      setter('');
+      return;
+    }
+    const num = Number(val);
+    if (!isNaN(num)) setter(num);
   };
 
   // --- Calculations ---
   const fullData = useMemo(() => {
     const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
-    const baseSacrificeMonthlyTotal = baseSacrifices.reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+    const grossBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+    const netBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+
     const monthlyBaseSalary = baseSalary / 12;
 
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
-      const monthlyVariableIncome = m.income.reduce((s, i) => s + Number(i.amount), 0);
+      const monthlyVariableGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
-      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + monthlyVariableIncome;
+      // Variable items from 'deductions' list can also be 'income' or 'salary_sacrifice' (gross)
+      const varGrossIncome = m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const varGrossSacrifice = m.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const varNetDeduction = m.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const varTaxFree = m.deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+
+      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + monthlyVariableGrossIncome + varGrossIncome;
       const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
 
       return {
         income: [
           { name: 'Base Salary', amount: monthlyBaseSalary },
           { name: 'Base Enhancements', amount: baseEnhancementMonthlyTotal },
-          { name: 'Overtime Total', amount: otTotal },
-          ...m.income
+          { name: 'Overtime', amount: otTotal },
+          ...m.income,
+          ...m.deductions.filter(d => d.type === 'income')
         ],
         deductions: [
-          { name: 'Base Sacrifices', amount: baseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
-          { name: 'Pension arrangement', amount: pension, type: 'pension' },
-          ...m.deductions
-        ]
+          { name: 'Base Gross Sacrifices', amount: grossBaseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
+          { name: 'Pension', amount: pension, type: 'pension' },
+          ...m.deductions.filter(d => d.type === 'salary_sacrifice'),
+          // Net items (taken after tax)
+          { name: 'Base Net Sacrifices', amount: netBaseSacrificeMonthlyTotal, type: 'net_sacrifice' },
+          ...m.deductions.filter(d => d.type === 'net_sacrifice')
+        ],
+        taxFree: varTaxFree
       };
     });
   }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices]);
 
   const projection = projectAnnual(fullData, selectedMonthIdx, taxCode, baseSalary);
-  const currentMonthData = fullData[selectedMonthIdx];
+  const currentMonthFull = fullData[selectedMonthIdx];
 
   const monthlyResults = calculateTax(
-    currentMonthData.income.reduce((s, i) => s + Number(i.amount), 0),
-    currentMonthData.deductions.reduce((s, i) => s + (i.type === 'pension' ? Number(i.amount) : 0), 0),
-    currentMonthData.deductions.reduce((s, i) => s + (i.type === 'salary_sacrifice' ? Number(i.amount) : 0), 0),
-    taxCode
+    currentMonthFull.income.reduce((s, i) => s + Number(i.amount), 0),
+    currentMonthFull.deductions.find(d => d.type === 'pension')?.amount || 0,
+    currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount), 0),
+    taxCode,
+    currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount), 0)
   );
 
-  const monthlyTaxFree = months[selectedMonthIdx].deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + Number(d.amount), 0);
-  const totalMonthlyNet = monthlyResults.monthlyTakeHome + monthlyTaxFree;
+  const totalMonthlyNet = monthlyResults.monthlyTakeHome + currentMonthFull.taxFree;
 
   // Overtime Processing
   const allOvertime = useMemo(() => {
@@ -107,19 +130,13 @@ function App() {
   }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Tax Recommendation
-  const recommendedCode = promoteRecommendedCode(projection.taxableIncome + projection.pensionContribution, taxCode);
+  const recommendedCode = recommendTaxCode(projection.taxableIncome + projection.pensionContribution);
   const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
-
-  function promoteRecommendedCode(taxable, current) {
-    // Very high level recommendation
-    if (taxable > 125140) return 'D0';
-    if (taxable > 100000) return '0T'; // Simplification for user
-    return '1257L';
-  }
+  const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary);
 
   // --- Handlers ---
   const addBaseItem = (type) => {
-    const newItem = { id: Date.now().toString(), name: 'New Item', amount: 0, frequency: 'monthly' };
+    const newItem = { id: Date.now().toString(), name: 'New Item', amount: 0, frequency: 'monthly', type: type === 'sacrifice' ? 'salary_sacrifice' : 'income' };
     if (type === 'enhancement') setBaseEnhancements([...baseEnhancements, newItem]);
     else setBaseSacrifices([...baseSacrifices, newItem]);
   };
@@ -139,8 +156,8 @@ function App() {
   const addMonthItem = (monthIdx, type) => {
     const n = [...months];
     const newItem = type === 'overtime'
-      ? { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], reason: 'Work', hours: 0, multiplier: 1.5, claimed: false }
-      : { id: Date.now().toString(), name: 'Item', amount: 0, type: type === 'deductions' ? 'salary_sacrifice' : 'other' };
+      ? { id: Date.now().toString(), date: new Date().toISOString().split('T')[0], reason: '', hours: '', multiplier: 1.5, claimed: false }
+      : { id: Date.now().toString(), name: 'Item', amount: '', type: type === 'deductions' ? 'salary_sacrifice' : 'other' };
     n[monthIdx][type].push(newItem);
     setMonths(n);
   };
@@ -167,15 +184,15 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v8.0</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v9.0</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
-      {getTaxTrapAdvice(projection.taxableIncome).active && (
+      {trapAdvice.active && (
         <div className="glass-card" style={{ border: '1px solid var(--error)', marginBottom: '2rem' }}>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <AlertTriangle color="var(--error)" />
-            <div><strong>Tax Trap Alert:</strong> {getTaxTrapAdvice(projection.taxableIncome).message} <p style={{ margin: 0, opacity: 0.8 }}>{getTaxTrapAdvice(projection.taxableIncome).advice}</p></div>
+            <div><strong>Tax Trap Alert:</strong> {trapAdvice.message} <p style={{ margin: 0, opacity: 0.8 }}>{trapAdvice.advice}</p></div>
           </div>
         </div>
       )}
@@ -187,28 +204,24 @@ function App() {
             <div className="glass-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>Monthly Summary</h2>
-                <select className="input-field" style={{ width: 'auto' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
+                <select className="input-field" style={{ width: 'auto', fontSize: '1.2rem' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
                   {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
               </div>
 
               <div style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Base Salary (Gross):</span>
-                  <span>£{(baseSalary / 12).toFixed(2)}</span>
+                  <span>Total Gross Monthly:</span>
+                  <span>£{currentMonthFull.income.reduce((s, i) => s + Number(i.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-                {baseEnhancements.map(e => (
-                  <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.2rem', opacity: 0.7 }}>
-                    <span>{e.name}:</span>
-                    <span>£{getMonthlyValue(e.amount, e.frequency).toFixed(2)}</span>
-                  </div>
-                ))}
-                {months[selectedMonthIdx].overtime.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.2rem', opacity: 0.7 }}>
-                    <span>Overtime Total:</span>
-                    <span>£{months[selectedMonthIdx].overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0).toFixed(2)}</span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                  <span>Tax & NI:</span>
+                  <span style={{ color: 'var(--error)' }}>-£{(monthlyResults.incomeTax / 12 + monthlyResults.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                  <span>Net Deductions (Post-Tax):</span>
+                  <span style={{ color: 'var(--error)' }}>-£{currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + Number(d.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
               </div>
 
               <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Variable Items <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer' }} /></div>
@@ -216,9 +229,17 @@ function App() {
                 <div key={d.id} className="income-line">
                   <input placeholder="Name" value={d.name} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'name', e.target.value)} className="input-field" />
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <input type="number" placeholder="Amt" value={d.amount} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', Number(e.target.value))} className="input-field" />
+                    <input
+                      placeholder="Amount"
+                      value={d.amount}
+                      onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', v))}
+                      className="input-field"
+                    />
                     <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
-                      <option value="salary_sacrifice">Sacrifice</option><option value="tax_free">Expense</option><option value="income">Income</option>
+                      <option value="salary_sacrifice">Gross Sacrifice</option>
+                      <option value="net_sacrifice">Net Sacrifice</option>
+                      <option value="tax_free">Expense</option>
+                      <option value="income">Income</option>
                     </select>
                     <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
                   </div>
@@ -234,19 +255,22 @@ function App() {
 
             <div className="glass-card">
               <h2 style={{ margin: 0 }}>Annual Forecast</h2>
-              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '2rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '2.2rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', opacity: 0.7 }}>
                 <div><div className="stat-label">Taxable Income</div>£{projection.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 <div><div className="stat-label">Total Tax/NI</div>£{(projection.incomeTax + projection.ni).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <hr style={{ opacity: 0.1, margin: '1.5rem 0' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}><span>Total OT (Gross):</span><strong>£{ytdOTTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
-              <div style={{ marginTop: '1.5rem' }}>
-                <div className="stat-label">Recommended Tax Code</div>
-                <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ color: isCodeCorrect ? 'var(--success)' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
-                  {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Suggest: {recommendedCode}</span>}
+
+              <div style={{ marginTop: '1rem' }}>
+                <div className="stat-label">Current Tax Code</div>
+                <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                  <span style={{ color: isCodeCorrect ? 'white' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
+                  {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Recommended: {recommendedCode}</span>}
                 </div>
+                {!isCodeCorrect && (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: 0 }}>Your tax code does not match your projected income. Reclaiming allowance is advised.</p>
+                )}
               </div>
             </div>
           </div>
@@ -287,25 +311,30 @@ function App() {
 
               {filteredOT.map(o => (
                 <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 1fr 1fr 1fr 24px', gap: '0.6rem', alignItems: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1.2fr 1.5fr 1fr 1fr 24px', gap: '0.6rem', alignItems: 'center' }}>
                     <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
                       {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
                     </button>
                     <input type="date" value={o.date} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'date', e.target.value)} className="input-field" style={{ fontSize: '0.8rem' }} />
                     <input placeholder="Reason" value={o.reason} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'reason', e.target.value)} className="input-field" />
-                    <input type="number" placeholder="Hrs" value={o.hours} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'hours', Number(e.target.value))} className="input-field" />
+                    <input
+                      placeholder="Hrs"
+                      value={o.hours}
+                      onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'hours', v))}
+                      className="input-field"
+                    />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <select value={o.multiplier} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'multiplier', Number(e.target.value))} className="input-field" style={{ fontSize: '0.8rem', padding: '0.2rem' }}>
                         <option value={1.5}>1.5x</option><option value={2}>2x</option>
                       </select>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toFixed(2)}</span>
+                      <span style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toLocaleString()}</span>
                     </div>
                     <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
                   </div>
                   <div style={{ fontSize: '0.7rem', opacity: 0.4, marginTop: '0.25rem' }}>Log month: {o.monthName}</div>
                 </div>
               ))}
-              {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime matches filters.</p>}
+              {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged.</p>}
             </div>
           </div>
         )}
@@ -314,23 +343,20 @@ function App() {
           <div className="glass-card">
             <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Config</h2>
             <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
-              <div><label className="stat-label">Annual Salary</label><input type="number" value={baseSalary} onChange={(e) => setBaseSalary(Number(e.target.value))} className="input-field" /></div>
-              <div><label className="stat-label">Contracted Hrs(wk)</label><input type="number" value={contractedHours} onChange={(e) => setContractedHours(Number(e.target.value))} className="input-field" /></div>
-              <div>
-                <label className="stat-label">Tax Code</label>
-                <input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" style={{ color: isCodeCorrect ? 'white' : 'var(--error)', fontWeight: isCodeCorrect ? 'normal' : 'bold' }} />
-              </div>
-              <div><label className="stat-label">Base Pension % arrangement</label><input type="number" value={pensionPercent} onChange={(e) => setPensionPercent(Number(e.target.value))} className="input-field" /></div>
+              <div><label className="stat-label">Annual Salary</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
+              <div><label className="stat-label">Contracted Hrs(wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
+              <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
+              <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
             </div>
 
             <div className="dashboard-grid">
               <div>
-                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
+                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
                 {baseEnhancements.map(e => (
                   <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
                     <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => updateBaseItem('enhancement', e.id, 'amount', Number(v.target.value))} className="input-field" />
+                      <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
                       <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
                         <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
                       </select>
@@ -340,12 +366,16 @@ function App() {
                 ))}
               </div>
               <div>
-                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Base Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
+                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
                 {baseSacrifices.map(d => (
                   <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
                     <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
                     <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => updateBaseItem('sacrifice', d.id, 'amount', Number(v.target.value))} className="input-field" />
+                      <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
+                      <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
+                        <option value="salary_sacrifice">Gross</option>
+                        <option value="net_sacrifice">Net</option>
+                      </select>
                       <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
                         <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
                       </select>

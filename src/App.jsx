@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV9');
+    const saved = localStorage.getItem('taxTrackerDataV9_5');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV9', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV9_5', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -49,7 +49,6 @@ function App() {
     return Number(amount) || 0;
   };
 
-  // Improved numeric input handler to prevent "0100" issues
   const handleNumericInput = (val, setter) => {
     if (val === '') {
       setter('');
@@ -60,25 +59,43 @@ function App() {
   };
 
   // --- Calculations ---
-  const fullData = useMemo(() => {
+
+  // 1. Calculate the "Recurring Base" for projection
+  const futureBaseData = useMemo(() => {
+    const monthlyBaseSalary = baseSalary / 12;
+    const baseEnhancementMonthly = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
+    const grossBaseSacrificeMonthly = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+    const netBaseSacrificeMonthly = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
+
+    const grossForPension = monthlyBaseSalary + baseEnhancementMonthly;
+    const pension = grossForPension * (pensionPercent / 100);
+
+    return {
+      gross: monthlyBaseSalary + baseEnhancementMonthly,
+      pension: pension,
+      grossSacrifice: grossBaseSacrificeMonthly,
+      netSacrifice: netBaseSacrificeMonthly,
+      taxFree: 0 // Usually one-offs
+    };
+  }, [baseSalary, baseEnhancements, baseSacrifices, pensionPercent, contractedHours]);
+
+  // 2. Prepare Actual Month Data for calculation engine
+  const monthsActualData = useMemo(() => {
     const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
     const grossBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
     const netBaseSacrificeMonthlyTotal = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
-
     const monthlyBaseSalary = baseSalary / 12;
 
     return months.map(m => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
-      const monthlyVariableGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+      const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-      // Variable items from 'deductions' list can also be 'income' or 'salary_sacrifice' (gross)
-      const varGrossIncome = m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome;
+      const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
+
       const varGrossSacrifice = m.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
       const varNetDeduction = m.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + (Number(d.amount) || 0), 0);
       const varTaxFree = m.deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
-
-      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + monthlyVariableGrossIncome + varGrossIncome;
-      const pension = totalMonthlyGrossForPension * (pensionPercent / 100);
 
       return {
         income: [
@@ -92,7 +109,6 @@ function App() {
           { name: 'Base Gross Sacrifices', amount: grossBaseSacrificeMonthlyTotal, type: 'salary_sacrifice' },
           { name: 'Pension', amount: pension, type: 'pension' },
           ...m.deductions.filter(d => d.type === 'salary_sacrifice'),
-          // Net items (taken after tax)
           { name: 'Base Net Sacrifices', amount: netBaseSacrificeMonthlyTotal, type: 'net_sacrifice' },
           ...m.deductions.filter(d => d.type === 'net_sacrifice')
         ],
@@ -101,15 +117,22 @@ function App() {
     });
   }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices]);
 
-  const projection = projectAnnual(fullData, selectedMonthIdx, taxCode, baseSalary);
-  const currentMonthFull = fullData[selectedMonthIdx];
+  // 3. Projections
+  const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, baseSalary);
+
+  // 4. Current Selected Month Calculations
+  const currentMonthFull = monthsActualData[selectedMonthIdx];
+  const monthlyGross = currentMonthFull.income.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const monthlyPension = currentMonthFull.deductions.find(d => d.type === 'pension')?.amount || 0;
+  const monthlyGrossSacrifice = currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
+  const monthlyNetSacrifice = currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
 
   const monthlyResults = calculateTax(
-    currentMonthFull.income.reduce((s, i) => s + Number(i.amount), 0),
-    currentMonthFull.deductions.find(d => d.type === 'pension')?.amount || 0,
-    currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount), 0),
+    monthlyGross,
+    monthlyPension,
+    monthlyGrossSacrifice,
     taxCode,
-    currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount), 0)
+    monthlyNetSacrifice
   );
 
   const totalMonthlyNet = monthlyResults.monthlyTakeHome + currentMonthFull.taxFree;
@@ -120,7 +143,6 @@ function App() {
   }, [months]);
 
   const ytdOTTotal = allOvertime.reduce((acc, o) => acc + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
-  const ytdOTHours = allOvertime.reduce((acc, o) => acc + Number(o.hours), 0);
 
   const filteredOT = allOvertime.filter(o => {
     if (otFilterClaimed === 'claimed' && !o.claimed) return false;
@@ -129,14 +151,14 @@ function App() {
     return true;
   }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Tax Recommendation
-  const recommendedCode = recommendTaxCode(projection.taxableIncome + projection.pensionContribution);
+  // Tax Recommendation (Based on Projected Adjusted Net Income)
+  const recommendedCode = recommendTaxCode(projection.taxableIncome);
   const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
   const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary);
 
   // --- Handlers ---
   const addBaseItem = (type) => {
-    const newItem = { id: Date.now().toString(), name: 'New Item', amount: 0, frequency: 'monthly', type: type === 'sacrifice' ? 'salary_sacrifice' : 'income' };
+    const newItem = { id: Date.now().toString(), name: 'New Item', amount: '', frequency: 'monthly', type: type === 'sacrifice' ? 'salary_sacrifice' : 'income' };
     if (type === 'enhancement') setBaseEnhancements([...baseEnhancements, newItem]);
     else setBaseSacrifices([...baseSacrifices, newItem]);
   };
@@ -184,7 +206,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v9.0</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v9.5</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -211,26 +233,30 @@ function App() {
 
               <div style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Total Gross Monthly:</span>
-                  <span>£{currentMonthFull.income.reduce((s, i) => s + Number(i.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span>Total Gross Income:</span>
+                  <span>£{monthlyGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
                   <span>Tax & NI:</span>
                   <span style={{ color: 'var(--error)' }}>-£{(monthlyResults.incomeTax / 12 + monthlyResults.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Net Deductions (Post-Tax):</span>
-                  <span style={{ color: 'var(--error)' }}>-£{currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + Number(d.amount || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span>Pension:</span>
+                  <span style={{ color: 'var(--error)' }}>-£{(monthlyPension).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
+                  <span>Net Sacrifices (Post-Tax):</span>
+                  <span style={{ color: 'var(--error)' }}>-£{monthlyNetSacrifice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
-              <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Variable Items <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer' }} /></div>
+              <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Monthly Variable <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer' }} /></div>
               {months[selectedMonthIdx].deductions.map(d => (
                 <div key={d.id} className="income-line">
                   <input placeholder="Name" value={d.name} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'name', e.target.value)} className="input-field" />
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
                     <input
-                      placeholder="Amount"
+                      placeholder="Amt"
                       value={d.amount}
                       onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', v))}
                       className="input-field"
@@ -263,13 +289,13 @@ function App() {
               <hr style={{ opacity: 0.1, margin: '1.5rem 0' }} />
 
               <div style={{ marginTop: '1rem' }}>
-                <div className="stat-label">Current Tax Code</div>
+                <div className="stat-label">Tax Code Check</div>
                 <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                   <span style={{ color: isCodeCorrect ? 'white' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
                   {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Recommended: {recommendedCode}</span>}
                 </div>
                 {!isCodeCorrect && (
-                  <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: 0 }}>Your tax code does not match your projected income. Reclaiming allowance is advised.</p>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: 0 }}>Your code suggests a full allowance, but your Adjusted Net Income is high. Flagged for review.</p>
                 )}
               </div>
             </div>
@@ -341,7 +367,7 @@ function App() {
 
         {activeTab === 'config' && (
           <div className="glass-card">
-            <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Config</h2>
+            <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
             <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
               <div><label className="stat-label">Annual Salary</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
               <div><label className="stat-label">Contracted Hrs(wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>

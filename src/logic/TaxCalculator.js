@@ -1,6 +1,6 @@
 /**
- * UK Tax Calculator 2025/26 - v9.0 Logic Refinement
- * Handles Graduated Tax Codes, Pension Advice (%), and Net vs Gross Sacrifices.
+ * UK Tax Calculator 2025/26 - v9.5 Logic
+ * Focus: Adjusted Net Income (Pension-aware) and Isolated Projections.
  */
 
 const round = (val) => Math.round(val * 100) / 100;
@@ -21,10 +21,11 @@ export const parseTaxCode = (code) => {
     return 12570;
 };
 
-export const recommendTaxCode = (taxableIncome) => {
-    if (taxableIncome > 125140) return 'D0';
-    if (taxableIncome > 100000) {
-        const excess = taxableIncome - 100000;
+// Recommends tax code based on Adjusted Net Income (Gross - Pension - Gross Sacrifices)
+export const recommendTaxCode = (adjustedNetIncome) => {
+    if (adjustedNetIncome > 125140) return 'D0';
+    if (adjustedNetIncome > 100000) {
+        const excess = adjustedNetIncome - 100000;
         const reduction = Math.min(12570, Math.floor(excess / 2));
         const newAllowance = 12570 - reduction;
         if (newAllowance <= 0) return '0T';
@@ -34,13 +35,14 @@ export const recommendTaxCode = (taxableIncome) => {
 };
 
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0) => {
-    // salarySacrifice here refers specifically to GROSS sacrifices
+    // salarySacrifice here refers specifically to GROSS sacrifices (pre-tax)
+    // taxableIncome is Adjusted Net Income for personal allowance purposes
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
 
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
-    // HMRC Tapered Allowance Logic
+    // HMRC Tapered Allowance Logic (based on Adjusted Net Income)
     if (taxableIncome > 100000 && personalAllowance > 0) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
@@ -82,7 +84,7 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
 
     return {
         gross: round(annualGross),
-        taxableIncome: round(taxableIncome),
+        taxableIncome: round(taxableIncome), // This is Adjusted Net Income
         personalAllowance: round(personalAllowance),
         incomeTax: round(incomeTax),
         ni: round(ni),
@@ -100,61 +102,58 @@ export const calculateOvertime = (annualSalary, contractedHours, otHours, multip
     return round(hourlyRate * (otHours || 0) * multiplier);
 };
 
-export const projectAnnual = (monthsData, currentMonthIndex, taxCode, baseSalary) => {
+export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode, baseSalary) => {
+    // CurrentMonthIndex is 0-indexed (0 = April)
+
     let ytdGross = 0;
     let ytdPension = 0;
     let ytdSacrifice = 0;
     let ytdNetDeductions = 0;
     let ytdTaxFree = 0;
 
+    // 1. Sum up YTD Actuals (including the current month)
     for (let i = 0; i <= currentMonthIndex; i++) {
-        const m = monthsData[i];
-        ytdGross += m.income.reduce((s, item) => s + Number(item.amount), 0);
-        ytdPension += m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
-        ytdSacrifice += m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);
-        ytdNetDeductions += m.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount) : 0), 0);
-        ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount) : 0), 0);
+        const m = monthsActualData[i];
+        ytdGross += m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
+        ytdPension += m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount || 0) : 0), 0);
+        ytdSacrifice += m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount || 0) : 0), 0);
+        ytdNetDeductions += m.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount || 0) : 0), 0);
+        ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
     }
 
-    const remaining = 11 - currentMonthIndex;
-    const curr = monthsData[currentMonthIndex];
+    // 2. Project remaining months using ONLY futureBaseData (recurring settings)
+    const remainingCount = 11 - currentMonthIndex;
+    if (remainingCount > 0) {
+        ytdGross += (futureBaseData.gross * remainingCount);
+        ytdPension += (futureBaseData.pension * remainingCount);
+        ytdSacrifice += (futureBaseData.grossSacrifice * remainingCount);
+        ytdNetDeductions += (futureBaseData.netSacrifice * remainingCount);
+        ytdTaxFree += (futureBaseData.taxFree * remainingCount);
+    }
 
-    const monthlyGross = curr.income.reduce((s, item) => s + Number(item.amount), 0);
-    const monthlyPension = curr.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount) : 0), 0);
-    const monthlySacrifice = curr.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount) : 0), 0);
-    const monthlyNetDeductions = curr.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount) : 0), 0);
-    const monthlyTaxFree = curr.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount) : 0), 0);
-
-    const projectedGross = ytdGross + (monthlyGross * remaining);
-    const projectedPension = ytdPension + (monthlyPension * remaining);
-    const projectedSacrifice = ytdSacrifice + (monthlySacrifice * remaining);
-    const projectedNetDeductions = ytdNetDeductions + (monthlyNetDeductions * remaining);
-    const projectedTaxFree = ytdTaxFree + (monthlyTaxFree * remaining);
-
-    const taxResults = calculateTax(projectedGross, projectedPension, projectedSacrifice, taxCode, projectedNetDeductions);
+    const taxResults = calculateTax(ytdGross, ytdPension, ytdSacrifice, taxCode, ytdNetDeductions);
 
     return {
         ...taxResults,
-        projectedTaxFree: round(projectedTaxFree),
-        finalTakeHome: round(taxResults.takeHome + projectedTaxFree)
+        projectedTaxFree: round(ytdTaxFree),
+        finalTakeHome: round(taxResults.takeHome + ytdTaxFree)
     };
 };
 
-export const getTaxTrapAdvice = (projectedTaxableIncome, currentPensionPercent, annualGross) => {
-    if (projectedTaxableIncome > 100000 && projectedTaxableIncome < 125140) {
-        const excess = projectedTaxableIncome - 100000;
+export const getTaxTrapAdvice = (adjustedNetIncome, currentPensionPercent, annualGross) => {
+    if (adjustedNetIncome > 100000 && adjustedNetIncome < 125140) {
+        const excess = adjustedNetIncome - 100000;
         const allowanceLost = excess / 2;
-        const taxCost = (allowanceLost * 0.40) + (excess * 0.40); // 40% on lost allowance + 40% on excess
 
-        // Calculate required percentage increase
-        const requiredRelief = excess;
-        const percentageIncrease = (requiredRelief / annualGross) * 100;
+        // Required additional relief (pension or sacrifice) to get back to £100k
+        const requiredAdditionalRelief = excess;
+        const percentageIncrease = (requiredAdditionalRelief / annualGross) * 100;
         const suggestedPension = Math.ceil(currentPensionPercent + percentageIncrease);
 
         return {
             active: true,
-            message: `You are in the 60% Tax Trap! You've lost £${round(allowanceLost).toLocaleString()} of Personal Allowance.`,
-            advice: `Increase your pension contribution from ${currentPensionPercent}% to ${suggestedPension}% to reclaim your allowance.`
+            message: `You are in the 60% Tax Trap! Your Adjusted Net Income is £${round(adjustedNetIncome).toLocaleString()}.`,
+            advice: `Increase your pension contribution from ${currentPensionPercent}% to ${suggestedPension}% to reclaim £${round(allowanceLost).toLocaleString()} of Personal Allowance.`
         };
     }
     return { active: false };

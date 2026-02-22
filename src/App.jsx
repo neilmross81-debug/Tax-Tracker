@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, Coffee, ExternalLink } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV11_2');
+    const saved = localStorage.getItem('taxTrackerDataV13');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV11_2', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV13', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -121,7 +121,6 @@ function App() {
   const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode);
 
   // 4. Current Selected Month Summary Logic
-  // IMPORTANT: We scale current month values to annual to get the correct marginal tax impact, then divide back.
   const currentMonthFull = monthsActualData[selectedMonthIdx];
   const monthlyGross = currentMonthFull.income.reduce((s, i) => s + Number(i.amount || 0), 0);
   const monthlyPension = currentMonthFull.deductions.find(d => d.type === 'pension')?.amount || 0;
@@ -152,7 +151,7 @@ function App() {
     return true;
   }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Tax Recommendation (Based on Projected Adjusted Net Income)
+  // Tax Recommendation
   const recommendedCode = recommendTaxCode(projection.taxableIncome);
   const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
   const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary, taxCode);
@@ -206,9 +205,14 @@ function App() {
 
   return (
     <div className="app-container">
-      <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.2</span></h1>
-        <p>UK Tax Year 2025/26 - Professional Grade</p>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v13.0</span></h1>
+          <p>UK Tax Year 2025/26 - Professional Grade</p>
+        </div>
+        <a href="https://www.buymeacoffee.com/taxtracker" target="_blank" rel="noopener noreferrer" className="coffee-btn">
+          <Coffee size={18} /> <span>Support</span>
+        </a>
       </header>
 
       {trapAdvice.active && (
@@ -256,7 +260,6 @@ function App() {
         </div>
       )}
 
-      {/* Main Content Area */}
       <main style={{ paddingBottom: '5rem' }}>
         {activeTab === 'dashboard' && (
           <div className="dashboard-grid">
@@ -279,7 +282,7 @@ function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
                   <span>Pension:</span>
-                  <span style={{ color: 'var(--error)' }}>-£{(monthlyPension).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span style={{ color: 'var(--error)' }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
                   <span>Net Deductions (Post-Tax):</span>
@@ -402,62 +405,97 @@ function App() {
         )}
 
         {activeTab === 'config' && (
-          <div className="glass-card">
-            <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
-            <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
-              <div><label className="stat-label">Annual Salary (£)</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
-              <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
-              <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
-              <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
-            </div>
-
-            <div className="dashboard-grid">
-              <div>
-                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
-                {baseEnhancements.map(e => (
-                  <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                    <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
-                      <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
-                        <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                      </select>
-                      <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                ))}
+          <div>
+            <div className="glass-card">
+              <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
+              <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
+                <div><label className="stat-label">Annual Salary (£)</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
+                <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
+                <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
+                <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
               </div>
-              <div>
-                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
-                {baseSacrifices.map(d => (
-                  <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                    <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
-                      <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
-                        <option value="salary_sacrifice">Gross</option>
-                        <option value="net_sacrifice">Net</option>
-                      </select>
-                      <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
-                        <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                      </select>
-                      <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            <div style={{ marginTop: '3rem', textAlign: 'center' }}>
-              <button onClick={clearCacheAndReload} className="btn-secondary">
-                <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Reset & Update Code
-              </button>
+              <div className="dashboard-grid">
+                <div>
+                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
+                  {baseEnhancements.map(e => (
+                    <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
+                      <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
+                        <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
+                          <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                        </select>
+                        <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
+                  {baseSacrifices.map(d => (
+                    <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
+                      <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
+                        <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
+                          <option value="salary_sacrifice">Gross</option>
+                          <option value="net_sacrifice">Net</option>
+                        </select>
+                        <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
+                          <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                        </select>
+                        <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="card" style={{ marginTop: '1.5rem', background: 'linear-gradient(135deg, rgba(55, 65, 81, 0.4), rgba(17, 24, 39, 0.4))', border: '1px solid var(--primary)' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}><Coffee size={20} /> Support the Developer</h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>If this tool has helped you save money or navigate the tax trap, consider supporting its development!</p>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <a href="https://www.buymeacoffee.com/taxtracker" target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ flex: 1, textAlign: 'center', textDecoration: 'none', padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 'bold' }}>
+                    Buy Me a Coffee
+                  </a>
+                </div>
+              </div>
+
+              <div className="card" style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ExternalLink size={20} /> Trusted Partners</h3>
+                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>Maximize your savings with these recommended financial tools:</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '0.5rem' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Pension Consolidation</div>
+                    <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.75rem' }}>Combine old pensions into one pot to reduce fees and simplify tracking.</div>
+                    <a href="#" className="btn-icon" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Learn More →</a>
+                  </div>
+                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '0.5rem' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>EV Fleet Specialists</div>
+                    <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.75rem' }}>Compare salary sacrifice quotes for the latest electric vehicles.</div>
+                    <a href="#" className="btn-icon" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Get Quotes →</a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={{ marginTop: '1.5rem', opacity: 0.8 }}>
+                <div style={{ fontSize: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <button className="btn-icon" onClick={() => { localStorage.removeItem('taxTrackerDataV13'); window.location.reload(); }}>Reset & Update Code</button>
+                  <p>© 2026 taxtracker.uk - Accurate logic based on HMRC 25/26 guidelines.</p>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+                <button onClick={clearCacheAndReload} className="btn-secondary">
+                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Reset & Update Code
+                </button>
+              </div>
             </div>
           </div>
         )}
       </main>
 
-      {/* Navigation Bar */}
       <nav className="nav-bar">
         <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <LayoutDashboard size={20} />

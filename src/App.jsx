@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, Coffee, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV13');
+    const saved = localStorage.getItem('taxTrackerDataV12');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV13', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV12', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -205,14 +205,9 @@ function App() {
 
   return (
     <div className="app-container">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v13.0</span></h1>
-          <p>UK Tax Year 2025/26 - Professional Grade</p>
-        </div>
-        <a href="https://www.buymeacoffee.com/taxtracker" target="_blank" rel="noopener noreferrer" className="coffee-btn">
-          <Coffee size={18} /> <span>Support</span>
-        </a>
+      <header>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v12.1</span></h1>
+        <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
       {trapAdvice.active && (
@@ -335,7 +330,17 @@ function App() {
                   {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Recommended: {recommendedCode}</span>}
                 </div>
                 {!isCodeCorrect && (
-                  <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: 0 }}>Your local tax code differs from HMRC recommendations for your projected Adjusted Net Income.</p>
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: '0 0 0.5rem 0' }}>Your local tax code differs from HMRC recommendations for your projected Adjusted Net Income.</p>
+                    <a
+                      href="https://www.gov.uk/tax-codes/how-to-update-your-tax-code"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    >
+                      <ExternalLink size={12} /> How to update your tax code (GOV.UK)
+                    </a>
+                  </div>
                 )}
               </div>
             </div>
@@ -452,36 +457,9 @@ function App() {
                 </div>
               </div>
 
-              <div className="card" style={{ marginTop: '1.5rem', background: 'linear-gradient(135deg, rgba(55, 65, 81, 0.4), rgba(17, 24, 39, 0.4))', border: '1px solid var(--primary)' }}>
-                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}><Coffee size={20} /> Support the Developer</h3>
-                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>If this tool has helped you save money or navigate the tax trap, consider supporting its development!</p>
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                  <a href="https://www.buymeacoffee.com/taxtracker" target="_blank" rel="noopener noreferrer" className="btn-primary" style={{ flex: 1, textAlign: 'center', textDecoration: 'none', padding: '0.75rem', borderRadius: '0.5rem', fontWeight: 'bold' }}>
-                    Buy Me a Coffee
-                  </a>
-                </div>
-              </div>
-
-              <div className="card" style={{ marginTop: '1.5rem' }}>
-                <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ExternalLink size={20} /> Trusted Partners</h3>
-                <p style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '1rem' }}>Maximize your savings with these recommended financial tools:</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
-                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '0.5rem' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Pension Consolidation</div>
-                    <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.75rem' }}>Combine old pensions into one pot to reduce fees and simplify tracking.</div>
-                    <a href="#" className="btn-icon" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Learn More →</a>
-                  </div>
-                  <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '0.5rem' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>EV Fleet Specialists</div>
-                    <div style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '0.75rem' }}>Compare salary sacrifice quotes for the latest electric vehicles.</div>
-                    <a href="#" className="btn-icon" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Get Quotes →</a>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card" style={{ marginTop: '1.5rem', opacity: 0.8 }}>
+              <div className="card" style={{ marginTop: '1.5rem', opacity: 0.5 }}>
                 <div style={{ fontSize: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <button className="btn-icon" onClick={() => { localStorage.removeItem('taxTrackerDataV13'); window.location.reload(); }}>Reset & Update Code</button>
+                  <button className="btn-icon" onClick={() => { localStorage.removeItem('taxTrackerDataV12'); window.location.reload(); }}>Reset & Update Code</button>
                   <p>© 2026 taxtracker.uk - Accurate logic based on HMRC 25/26 guidelines.</p>
                 </div>
               </div>

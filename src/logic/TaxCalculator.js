@@ -1,6 +1,6 @@
 /**
- * UK Tax Calculator 2025/26 - v11.0 Logic
- * Features: Expanded Sacrifice Advisor (EV, Cycle, Shares, Pension).
+ * UK Tax Calculator 2025/26 - v11.1 Logic
+ * Features: Sacrifice Advisor includes Tax Code Alignment advice.
  */
 
 const round = (val) => Math.round(val * 100) / 100;
@@ -131,14 +131,16 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
     };
 };
 
-export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross) => {
+export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross, currentTaxCode) => {
     if (ani > 100000 && ani < 125140) {
         const excess = ani - 100000;
         const allowanceLost = excess / 2;
-        const netTaxImpact = (allowanceLost * 0.40) + (excess * 0.40); // 40% on lost allowance + 40% on excess
+        const netTaxImpact = (allowanceLost * 0.40) + (excess * 0.40);
 
         const percentageIncrease = (excess / annualGross) * 100;
         const suggestedPension = Math.ceil(currentPensionPercent + percentageIncrease);
+        const correctCode = recommendTaxCode(ani);
+        const isCodeMismatch = currentTaxCode.toUpperCase().trim() !== correctCode.toUpperCase().trim();
 
         return {
             active: true,
@@ -146,6 +148,8 @@ export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross) => {
             allowanceLost: round(allowanceLost),
             potentialSaving: round(netTaxImpact),
             message: `Adjusted Net Income: £${round(ani).toLocaleString()} is in the 60% Tax Trap bracket.`,
+            isCodeMismatch,
+            correctCode,
             options: [
                 {
                     label: "Additional Pension",
@@ -159,13 +163,16 @@ export const getTaxTrapAdvice = (ani, currentPensionPercent, annualGross) => {
                 },
                 {
                     label: "EV Car Lease",
-                    value: `Sacrifice £${round(excess / 12).toLocaleString()} per month towards an EV Car`,
+                    value: `Sacrifice £${round(excess / 12).toLocaleString()} per month for an EV`,
                     type: "scheme"
                 },
                 {
-                    label: "Workplace Benefits",
-                    value: `Opt-in for sacrificed Healthcare, Shares (SIP), or Dental`,
-                    type: "scheme"
+                    label: "Update Tax Code",
+                    value: isCodeMismatch
+                        ? `Switch to ${correctCode} to avoid a tax bill if not sacrificing.`
+                        : `Your code ${currentTaxCode} is already correctly aligned.`,
+                    type: "warning",
+                    highlight: isCodeMismatch
                 }
             ]
         };

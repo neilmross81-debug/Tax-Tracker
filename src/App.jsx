@@ -24,7 +24,7 @@ function App() {
 
   // --- Persistence Logic ---
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV11');
+    const saved = localStorage.getItem('taxTrackerDataV11_1');
     if (saved) {
       const d = JSON.parse(saved);
       setTaxCode(d.taxCode || '1257L');
@@ -38,7 +38,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('taxTrackerDataV11', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
+    localStorage.setItem('taxTrackerDataV11_1', JSON.stringify({ taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months }));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, months]);
 
   // --- Helpers ---
@@ -155,7 +155,7 @@ function App() {
   // Tax Recommendation (Based on Projected Adjusted Net Income)
   const recommendedCode = recommendTaxCode(projection.taxableIncome);
   const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
-  const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary);
+  const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary, taxCode);
 
   // --- Handlers ---
   const addBaseItem = (type) => {
@@ -207,7 +207,7 @@ function App() {
   return (
     <div className="app-container">
       <header>
-        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.0</span></h1>
+        <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v11.1</span></h1>
         <p>UK Tax Year 2025/26 - Professional Grade</p>
       </header>
 
@@ -240,8 +240,13 @@ function App() {
               <div className="stat-label">Recommended Strategies:</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.8rem', marginTop: '0.5rem' }}>
                 {trapAdvice.options.map(opt => (
-                  <div key={opt.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', padding: '0.75rem', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--primary)', marginBottom: '0.25rem' }}>{opt.label}</div>
+                  <div key={opt.label} style={{
+                    background: opt.highlight ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255,255,255,0.03)',
+                    border: opt.highlight ? '1px solid var(--error)' : '1px solid var(--glass-border)',
+                    padding: '0.75rem',
+                    borderRadius: '0.5rem'
+                  }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: opt.highlight ? 'var(--error)' : 'var(--primary)', marginBottom: '0.25rem' }}>{opt.label}</div>
                     <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>{opt.value}</div>
                   </div>
                 ))}

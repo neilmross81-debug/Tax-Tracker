@@ -21,10 +21,6 @@ export const parseTaxCode = (code) => {
     return 12570;
 };
 
-/**
- * Recommends tax code based on Adjusted Net Income (ANI).
- * ANI = Total Gross - Pension - Gross Sacrifices.
- */
 export const recommendTaxCode = (ani) => {
     if (ani > 125140) return 'D0';
     if (ani > 100000) {
@@ -37,17 +33,11 @@ export const recommendTaxCode = (ani) => {
     return '1257L';
 };
 
-/**
- * Calculates tax based on ANNUAL figures.
- */
 export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifice = 0, taxCode = '1257L', netDeductions = 0) => {
-    // Adjusted Net Income (ANI) for personal allowance purposes
     const taxableIncome = Math.max(0, annualGross - pensionContribution - salarySacrifice);
-
     let baseAllowance = parseTaxCode(taxCode);
     let personalAllowance = baseAllowance;
 
-    // HMRC Tapered Allowance Logic (based on ANI)
     if (taxableIncome > 100000 && personalAllowance > 0) {
         const reduction = Math.min(personalAllowance, (taxableIncome - 100000) / 2);
         personalAllowance -= reduction;
@@ -89,7 +79,7 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
 
     return {
         gross: round(annualGross),
-        taxableIncome: round(taxableIncome), // Adjusted Net Income
+        taxableIncome: round(taxableIncome),
         personalAllowance: round(personalAllowance),
         incomeTax: round(incomeTax),
         ni: round(ni),
@@ -101,6 +91,12 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
     };
 };
 
+export const calculateOvertime = (annualSalary, contractedHours, otHours, multiplier) => {
+    if (!contractedHours || contractedHours <= 0) return 0;
+    const hourlyRate = (annualSalary / 52) / contractedHours;
+    return round(hourlyRate * (otHours || 0) * multiplier);
+};
+
 export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode) => {
     let ytdGross = 0;
     let ytdPension = 0;
@@ -108,7 +104,6 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
     let ytdNetDeductions = 0;
     let ytdTaxFree = 0;
 
-    // 1. Sum up YTD Actuals
     for (let i = 0; i <= currentMonthIndex; i++) {
         const m = monthsActualData[i];
         ytdGross += m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
@@ -118,7 +113,6 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
         ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
     }
 
-    // 2. Project future using recurring base
     const remaining = 11 - currentMonthIndex;
     if (remaining > 0) {
         ytdGross += (futureBaseData.gross * remaining);

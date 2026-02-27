@@ -401,15 +401,42 @@ function App() {
     const taxSaved = Math.max(0, baselineProjected.incomeTax - currentProjected.incomeTax);
     const niSaved = Math.max(0, baselineProjected.ni - currentProjected.ni);
 
+    // Per-item marginal savings
+    const sacrificeItemsSavings = [];
+
+    // 1. Pension
+    if (pensionType === 'salary_sacrifice' && currentProjected.pensionContribution > 0) {
+      const withoutPensionOptions = { ...options, pensionIsSS: false };
+      const withoutPensionProj = projectAnnual(months, { ...futureBaseData, pension: 0 }, selectedMonthIdx, taxCode, withoutPensionOptions);
+      sacrificeItemsSavings.push({
+        name: 'Pension (Mercer SS)',
+        amount: currentProjected.pensionContribution,
+        taxSaved: Math.max(0, withoutPensionProj.incomeTax - currentProjected.incomeTax),
+        niSaved: Math.max(0, withoutPensionProj.ni - currentProjected.ni)
+      });
+    }
+
+    // 2. Base Sacrifices
+    baseSacrifices.filter(s => s.type !== 'net_sacrifice').forEach(s => {
+      const annualItemAmount = getMonthlyValue(s.amount, s.frequency) * 12;
+      // We estimate marginal saving by subtracting this one item's annual value from the current gross sacrifice
+      const withoutThisItemProj = projectAnnual(months, { ...futureBaseData, grossSacrifice: Math.max(0, futureBaseData.grossSacrifice - (annualItemAmount / 12)) }, selectedMonthIdx, taxCode, options);
+
+      sacrificeItemsSavings.push({
+        name: s.name || 'Sacrifice',
+        amount: annualItemAmount,
+        taxSaved: Math.max(0, withoutThisItemProj.incomeTax - currentProjected.incomeTax),
+        niSaved: Math.max(0, withoutThisItemProj.ni - currentProjected.ni)
+      });
+    });
+
     // Monthly Timeline
     const timeline = monthsActualData.map(m => {
-      // For each month, calculate the actual tax/NI taken in that specific month's context
-      // Note: UK tax is cumulative, so this is an approximation for monthly visualization
-      const monthResult = calculateTax(m.gross * 12, m.pension * 12, 0, taxCode, 0, options); // Simplified monthly view
+      const monthResult = calculateTax(m.gross * 12, m.pension * 12, 0, taxCode, 0, options);
       return {
         name: m.month.substring(0, 3),
         gross: m.gross,
-        net: (monthResult.annualTakeHome / 12) + m.taxFree, // taxFree is annualised in logic usually
+        net: (monthResult.annualTakeHome / 12) + m.taxFree,
         tax: monthResult.incomeTax / 12,
         ni: monthResult.ni / 12,
         sl: monthResult.studentLoan / 12,
@@ -422,6 +449,7 @@ function App() {
     return {
       timeline,
       projections: currentProjected,
+      sacrificeItemsSavings,
       savings: {
         tax: taxSaved,
         ni: niSaved,
@@ -468,43 +496,48 @@ function App() {
             </div>
           </div>
 
-          {/* Savings Indicator */}
-          <div className="glass-card" style={{ border: '1px solid var(--success)', background: 'rgba(16, 185, 129, 0.05)' }}>
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'var(--success)' }}>Sacrifice Savings</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ opacity: 0.7 }}>Income Tax Saved:</span>
-                <strong style={{ color: 'var(--success)' }}>£{analyticsData.savings.tax.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ opacity: 0.7 }}>NI Saved:</span>
-                <strong style={{ color: 'var(--success)' }}>£{analyticsData.savings.ni.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
-              </div>
-              <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.2)', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
-                <span>Total Pro Saving:</span>
-                <strong style={{ fontSize: '1.2rem' }}>£{analyticsData.savings.total.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
+          {/* Detailed Sacrifice Savings Breakdown */}
+          <div className="glass-card" style={{ gridColumn: '1 / -1', border: '1px solid var(--success)', background: 'rgba(16, 185, 129, 0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <ShieldCheck size={20} /> Detailed Sacrifice Savings (Marginal)
+              </h3>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Total Annual Saving</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: 'var(--success)' }}>£{analyticsData.savings.total.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
               </div>
             </div>
-          </div>
 
-          {/* Breakdown Chart */}
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <h3 style={{ margin: '0 0 1rem 0', alignSelf: 'flex-start' }}>Wealth Split</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                </Pie>
-                <Tooltip formatter={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', width: '100%', marginTop: '1rem' }}>
-              {pieData.map(d => (
-                <div key={d.name} style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.color }} />
-                  <span style={{ opacity: 0.7 }}>{d.name}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+              {analyticsData.sacrificeItemsSavings.length > 0 ? (
+                analyticsData.sacrificeItemsSavings.map((item, idx) => (
+                  <div key={idx} style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '0.75rem', border: '1px solid rgba(16, 185, 129, 0.1)' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '0.95rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>{item.name}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ opacity: 0.6 }}>Contribution:</span>
+                        <span>£{item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ opacity: 0.6 }}>Income Tax Saved:</span>
+                        <span style={{ color: 'var(--success)' }}>+£{item.taxSaved.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ opacity: 0.6 }}>NI Saved:</span>
+                        <span style={{ color: 'var(--success)' }}>+£{item.niSaved.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                      </div>
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                        <span>Total Benefit:</span>
+                        <span style={{ fontSize: '1.1rem' }}>£{(item.taxSaved + item.niSaved).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2rem', opacity: 0.5 }}>
+                  No salary sacrifice items detected. Set them in the Config tab to see savings.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -723,7 +756,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.3</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.4</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

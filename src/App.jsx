@@ -341,7 +341,7 @@ function App() {
     const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
     const sandboxOtMonthly = (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0);
 
-    return months.map(m => {
+    return months.map((m, monthIdx) => {
       const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0) + sandboxOtMonthly;
       const holidaySupplementAmount = otTotal > 0 ? (otTotal * (holidaySupplementPercent / 100)) : 0;
 
@@ -723,7 +723,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.2</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

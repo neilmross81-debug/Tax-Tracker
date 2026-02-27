@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import AuthModal from './AuthModal';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -173,10 +174,10 @@ function App() {
       tab: 'config'
     },
     {
-      title: "3. Monthly Summary",
-      content: "View your itemized breakdown here. It mirrors a real payslip, showing every payment and deduction.",
-      target: "#tour-summary",
-      tab: 'dashboard'
+      title: "3. Advanced Analytics",
+      content: "View your itemized breakdown and new timeline graphs here. It tracks your wealth, overtime trends, and tax savings!",
+      target: "#tour-analytics-trigger",
+      tab: 'analytics'
     },
     {
       title: "4. Overtime Tracker",
@@ -354,12 +355,11 @@ function App() {
 
       // Map recurring items into specific lines
       const mappedEnhancements = baseEnhancements.map(e => ({ name: e.name || 'Enhancement', amount: getMonthlyValue(e.amount, e.frequency) }));
-      const mappedGrossSacrifices = baseSacrifices.filter(d => d.type !== 'net_sacrifice').map(d => ({ name: d.name || 'Sacrifice', amount: getMonthlyValue(d.amount, d.frequency), type: 'salary_sacrifice' }));
-      const mappedNetSacrifices = baseSacrifices.filter(d => d.type === 'net_sacrifice').map(d => ({ name: d.name || 'Net Sacrifice', amount: getMonthlyValue(d.amount, d.frequency), type: 'net_sacrifice' }));
+      const mappedSacrifices = baseSacrifices.map(s => ({ name: s.name || 'Sacrifice', amount: getMonthlyValue(s.amount, s.frequency), type: s.type }));
 
       // Add sandbox sacrifice if exists
       if (sandboxMode && sandboxSacrifice > 0) {
-        mappedGrossSacrifices.push({ name: 'Sandbox Exp.', amount: sandboxSacrifice / 12, type: 'salary_sacrifice' });
+        mappedSacrifices.push({ name: 'Sandbox Exp.', amount: sandboxSacrifice / 12, type: 'salary_sacrifice' });
       }
 
       const otRows = [{ name: 'Overtime', amount: otTotal }];
@@ -368,24 +368,183 @@ function App() {
       }
 
       return {
-        income: [
-          { name: 'Base Salary', amount: monthlyBaseSalary },
-          ...mappedEnhancements,
-          ...otRows,
-          ...m.income,
-          ...m.deductions.filter(d => d.type === 'income')
-        ],
-        deductions: [
-          ...mappedGrossSacrifices,
-          { name: 'Pension', amount: pension, type: 'pension' },
-          ...m.deductions.filter(d => d.type === 'salary_sacrifice'),
-          ...mappedNetSacrifices,
-          ...m.deductions.filter(d => d.type === 'net_sacrifice')
-        ],
-        taxFree: varTaxFree
+        month: MONTHS[monthIdx],
+        monthIdx: monthIdx,
+        gross: monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome,
+        ot: otTotal,
+        pension: pension,
+        taxFree: varTaxFree,
+        incomeItems: mappedEnhancements,
+        deductionItems: mappedSacrifices,
+        rawMonthsActual: m
       };
     });
-  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, holidaySupplementPercent]);
+  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, holidaySupplementPercent, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
+
+  // 3. Analytics & Projections Data
+  const analyticsData = useMemo(() => {
+    // Current trajectory (Projected Annual)
+    const options = {
+      taxYear,
+      studentLoanPlans,
+      childBenefitCount,
+      pensionIsSS: pensionType === 'salary_sacrifice'
+    };
+
+    const currentProjected = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, options);
+
+    // Baseline (No Sacrifices - for comparison)
+    // We assume sacrifice is 0 and pension is standard Relief at Source (not SS)
+    const baselineOptions = { ...options, pensionIsSS: false };
+    const baselineProjected = projectAnnual(monthsActualData, { ...futureBaseData, grossSacrifice: 0 }, selectedMonthIdx, taxCode, baselineOptions);
+
+    const taxSaved = Math.max(0, baselineProjected.incomeTax - currentProjected.incomeTax);
+    const niSaved = Math.max(0, baselineProjected.ni - currentProjected.ni);
+
+    // Monthly Timeline
+    const timeline = monthsActualData.map(m => {
+      // For each month, calculate the actual tax/NI taken in that specific month's context
+      // Note: UK tax is cumulative, so this is an approximation for monthly visualization
+      const monthResult = calculateTax(m.gross * 12, m.pension * 12, 0, taxCode, 0, options); // Simplified monthly view
+      return {
+        name: m.month.substring(0, 3),
+        gross: m.gross,
+        net: (monthResult.annualTakeHome / 12) + m.taxFree, // taxFree is annualised in logic usually
+        taxNI: (monthResult.incomeTax / 12) + (monthResult.ni / 12),
+        ot: m.ot,
+        pension: m.pension
+      };
+    });
+
+    return {
+      timeline,
+      projections: currentProjected,
+      savings: {
+        tax: taxSaved,
+        ni: niSaved,
+        total: taxSaved + niSaved
+      }
+    };
+  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months]);
+
+  // Analytics Tab Component
+  const AnalyticsTab = () => {
+    const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#8b5cf6'];
+    const pieData = [
+      { name: 'Take Home', value: analyticsData.projections.annualTakeHome + analyticsData.projections.projectedTaxFree, color: '#6366f1' },
+      { name: 'Income Tax', value: analyticsData.projections.incomeTax, color: '#f43f5e' },
+      { name: 'Nat. Insurance', value: analyticsData.projections.ni, color: '#fbbf24' },
+      { name: 'Pension', value: analyticsData.projections.pensionContribution, color: '#10b981' }
+    ];
+
+    return (
+      <div className="analytics-view">
+        <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
+          {/* Projections Card */}
+          <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
+            <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <TrendingUp size={20} color="var(--primary)" /> Year-End Forecast ({taxYear})
+            </h2>
+            <div className="dashboard-grid">
+              <div className="stat-card">
+                <label className="stat-label">Projected Gross</label>
+                <div className="stat-value">£{analyticsData.projections.gross.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div className="stat-card">
+                <label className="stat-label">Projected Net</label>
+                <div className="stat-value" style={{ color: 'var(--primary)' }}>£{analyticsData.projections.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div className="stat-card">
+                <label className="stat-label">Total Tax & NI</label>
+                <div className="stat-value" style={{ color: 'var(--error)' }}>£{analyticsData.projections.totalTaxNI.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div className="stat-card">
+                <label className="stat-label">Pension Pot Growth</label>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>£{analyticsData.projections.pensionContribution.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Savings Indicator */}
+          <div className="glass-card" style={{ border: '1px solid var(--success)', background: 'rgba(16, 185, 129, 0.05)' }}>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'var(--success)' }}>Sacrifice Savings</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ opacity: 0.7 }}>Income Tax Saved:</span>
+                <strong style={{ color: 'var(--success)' }}>£{analyticsData.savings.tax.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ opacity: 0.7 }}>NI Saved:</span>
+                <strong style={{ color: 'var(--success)' }}>£{analyticsData.savings.ni.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
+              </div>
+              <div style={{ borderTop: '1px solid rgba(16, 185, 129, 0.2)', paddingTop: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                <span>Total Pro Saving:</span>
+                <strong style={{ fontSize: '1.2rem' }}>£{analyticsData.savings.total.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Breakdown Chart */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h3 style={{ margin: '0 0 1rem 0', alignSelf: 'flex-start' }}>Wealth Split</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                  {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                </Pie>
+                <Tooltip formatter={(v) => `£${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', width: '100%', marginTop: '1rem' }}>
+              {pieData.map(d => (
+                <div key={d.name} style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.color }} />
+                  <span style={{ opacity: 0.7 }}>{d.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Monthly Timeline */}
+          <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
+            <h3 style={{ margin: '0 0 1.5rem 0' }}>Income vs. Deductions (Monthly)</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={analyticsData.timeline}>
+                <defs>
+                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} />
+                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => `£${v / 1000}k`} />
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }} />
+                <Legend />
+                <Area type="monotone" dataKey="gross" name="Gross Pay" stroke="#94a3b8" fill="transparent" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="net" name="Net Take Home" stroke="var(--primary)" fillOpacity={1} fill="url(#colorNet)" strokeWidth={2} />
+                <Area type="monotone" dataKey="taxNI" name="Tax + NI" stroke="var(--error)" fill="rgba(244, 63, 94, 0.1)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Overtime Tracker */}
+          <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
+            <h3 style={{ margin: '0 0 1.5rem 0' }}>Overtime History (£)</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={analyticsData.timeline}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} />
+                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} />
+                <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px' }} />
+                <Bar dataKey="ot" name="Overtime" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // 3. Projections
   const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
@@ -397,10 +556,10 @@ function App() {
 
   // 4. Current Selected Month Summary Logic
   const currentMonthFull = monthsActualData[selectedMonthIdx];
-  const monthlyGross = currentMonthFull.income.reduce((s, i) => s + Number(i.amount || 0), 0);
-  const monthlyPension = currentMonthFull.deductions.find(d => d.type === 'pension')?.amount || 0;
-  const monthlyGrossSacrifice = currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
-  const monthlyNetSacrifice = currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
+  const monthlyGross = currentMonthFull.incomeItems.reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.income.reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + currentMonthFull.ot + ((sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12);
+  const monthlyPension = currentMonthFull.pension;
+  const monthlyGrossSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
+  const monthlyNetSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
 
   const monthlyResultsAnnualized = calculateTax(
     monthlyGross * 12,
@@ -502,10 +661,10 @@ function App() {
   const exportToCSV = () => {
     const headers = ['Month', 'Gross Income', 'Pension', 'Salary Sacrifice', 'Tax Free Expenses', 'Net Pay'];
     const rows = monthsActualData.map((m, i) => {
-      const gross = m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
-      const pension = m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount || 0) : 0), 0);
-      const sacrifice = m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount || 0) : 0), 0);
-      const taxFree = m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
+      const gross = m.gross;
+      const pension = m.pension;
+      const sacrifice = m.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
+      const taxFree = m.taxFree;
 
       const results = calculateTax(gross * 12, pension * 12, sacrifice * 12, taxCode, 0, { taxYear, studentLoanPlans, childBenefitCount });
       const net = (results.annualTakeHome / 12) + taxFree;
@@ -564,7 +723,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v18.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.0</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -740,16 +899,38 @@ function App() {
               {/* INCOME LINES */}
               <div style={{ marginBottom: '1.25rem' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Payments</div>
-                {currentMonthFull.income.filter(i => Number(i.amount) !== 0).map((item, idx) => (
+                {currentMonthFull.incomeItems.filter(i => Number(i.amount) !== 0).map((item, idx) => (
                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>{item.name}</span>
                     <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
+                {currentMonthFull.rawMonthsActual.income.filter(i => Number(i.amount) !== 0).map((item, idx) => (
+                  <div key={`raw-income-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>{item.name}</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+                {currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'income' && Number(d.amount) !== 0).map((item, idx) => (
+                  <div key={`raw-deduction-income-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>{item.name}</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+                {currentMonthFull.ot > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>Overtime</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.ot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                  <span style={{ opacity: 0.75 }}>Base Salary</span>
+                  <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{((sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
               </div>
 
               {/* GROSS SACRIFICE / PRE-TAX DEDUCTION LINES */}
-              {(currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 || (pensionType === 'salary_sacrifice' && monthlyPension > 0)) && (
+              {(currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 || currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 || (pensionType === 'salary_sacrifice' && monthlyPension > 0)) && (
                 <div style={{ marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Pre-Tax Deductions</div>
                   {pensionType === 'salary_sacrifice' && monthlyPension > 0 && (
@@ -758,8 +939,14 @@ function App() {
                       <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
-                  {currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                  {currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                      <span style={{ opacity: 0.75 }}>{item.name}</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
+                  {currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                    <div key={`raw-ss-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                       <span style={{ opacity: 0.75 }}>{item.name}</span>
                       <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -799,11 +986,17 @@ function App() {
               </div>
 
               {/* NET (POST-TAX) DEDUCTIONS */}
-              {currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).length > 0 && (
+              {(currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).length > 0 || currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).length > 0) && (
                 <div style={{ marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Post-Tax Deductions</div>
-                  {currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                  {currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                      <span style={{ opacity: 0.75 }}>{item.name}</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
+                  {currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                    <div key={`raw-net-sac-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                       <span style={{ opacity: 0.75 }}>{item.name}</span>
                       <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -908,6 +1101,8 @@ function App() {
             </div>
           </div>
         )}
+
+        {activeTab === 'analytics' && <AnalyticsTab />}
 
         {activeTab === 'overtime' && (
           <div>
@@ -1110,6 +1305,10 @@ function App() {
         <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
+        </div>
+        <div className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} id="tour-analytics-trigger" onClick={() => setActiveTab('analytics')}>
+          <BarChart3 size={20} />
+          <span>Analytics</span>
         </div>
         <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />

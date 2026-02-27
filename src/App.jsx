@@ -391,12 +391,12 @@ function App() {
       pensionIsSS: pensionType === 'salary_sacrifice'
     };
 
-    const currentProjected = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, options);
+    const currentProjected = projectAnnual(months, futureBaseData, selectedMonthIdx, taxCode, options);
 
     // Baseline (No Sacrifices - for comparison)
     // We assume sacrifice is 0 and pension is standard Relief at Source (not SS)
     const baselineOptions = { ...options, pensionIsSS: false };
-    const baselineProjected = projectAnnual(monthsActualData, { ...futureBaseData, grossSacrifice: 0 }, selectedMonthIdx, taxCode, baselineOptions);
+    const baselineProjected = projectAnnual(months, { ...futureBaseData, grossSacrifice: 0 }, selectedMonthIdx, taxCode, baselineOptions);
 
     const taxSaved = Math.max(0, baselineProjected.incomeTax - currentProjected.incomeTax);
     const niSaved = Math.max(0, baselineProjected.ni - currentProjected.ni);
@@ -547,7 +547,7 @@ function App() {
   };
 
   // 3. Projections
-  const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
+  const projection = projectAnnual(months, futureBaseData, selectedMonthIdx, taxCode, {
     taxYear,
     studentLoanPlans,
     childBenefitCount,

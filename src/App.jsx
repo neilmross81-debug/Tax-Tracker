@@ -410,7 +410,10 @@ function App() {
         name: m.month.substring(0, 3),
         gross: m.gross,
         net: (monthResult.annualTakeHome / 12) + m.taxFree, // taxFree is annualised in logic usually
-        taxNI: (monthResult.incomeTax / 12) + (monthResult.ni / 12),
+        tax: monthResult.incomeTax / 12,
+        ni: monthResult.ni / 12,
+        sl: monthResult.studentLoan / 12,
+        hicbc: monthResult.hicbc / 12,
         ot: m.ot,
         pension: m.pension
       };
@@ -508,23 +511,20 @@ function App() {
           {/* Monthly Timeline */}
           <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
             <h3 style={{ margin: '0 0 1.5rem 0' }}>Income vs. Deductions (Monthly)</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={analyticsData.timeline}>
-                <defs>
-                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={analyticsData.timeline}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                 <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} />
                 <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => `£${v / 1000}k`} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }} />
+                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                 <Legend />
-                <Area type="monotone" dataKey="gross" name="Gross Pay" stroke="#94a3b8" fill="transparent" strokeDasharray="5 5" />
-                <Area type="monotone" dataKey="net" name="Net Take Home" stroke="var(--primary)" fillOpacity={1} fill="url(#colorNet)" strokeWidth={2} />
-                <Area type="monotone" dataKey="taxNI" name="Tax + NI" stroke="var(--error)" fill="rgba(244, 63, 94, 0.1)" />
-              </AreaChart>
+                <Bar dataKey="net" name="Net Pay" stackId="a" fill="var(--primary)" />
+                <Bar dataKey="tax" name="Income Tax" stackId="a" fill="#f43f5e" />
+                <Bar dataKey="ni" name="Nat. Insurance" stackId="a" fill="#fbbf24" />
+                <Bar dataKey="sl" name="Student Loan" stackId="a" fill="#06b6d4" />
+                <Bar dataKey="pension" name="Pension" stackId="a" fill="#10b981" />
+                <Bar dataKey="hicbc" name="HICBC" stackId="a" fill="#6b7280" />
+              </BarChart>
             </ResponsiveContainer>
           </div>
 
@@ -723,7 +723,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.2</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.3</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>

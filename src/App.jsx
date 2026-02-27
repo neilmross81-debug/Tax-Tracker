@@ -756,7 +756,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.5</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.6</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1330,7 +1330,7 @@ function App() {
         </div>
         <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
-          <span>OT Log</span>
+          <span>OT</span>
         </div>
         <div className={`nav-item ${activeTab === 'config' ? 'active' : ''}`} onClick={() => setActiveTab('config')}>
           <Settings size={20} />

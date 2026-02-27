@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
+import { auth, db } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import AuthModal from './AuthModal';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
@@ -61,58 +65,85 @@ function App() {
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
-  // --- Persistence Logic (Yearly Profiles v14.1) ---
+  // --- Persistence Logic (v17.0 - Firebase Cloud Sync) ---
+  const [currentUser, setCurrentUser] = useState(undefined); // undefined = loading, null = logged out
   const [profiles, setProfiles] = useState({});
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load Component
+  const DEFAULT_PROFILE = (year) => ({
+    taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5,
+    pensionPercent: 5, holidaySupplementPercent: 8.3,
+    studentLoanPlans: [], childBenefitCount: 0,
+    baseEnhancements: [], baseSacrifices: [],
+    months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] }))
+  });
+
+  const applyProfile = (prof) => {
+    setTaxCode(prof.taxCode || '1257L');
+    setBaseSalary(prof.baseSalary || 45000);
+    setContractedHours(prof.contractedHours || 37.5);
+    setPensionPercent(prof.pensionPercent !== undefined ? prof.pensionPercent : 5);
+    setHolidaySupplementPercent(prof.holidaySupplementPercent !== undefined ? prof.holidaySupplementPercent : 8.3);
+    setStudentLoanPlans(prof.studentLoanPlans || []);
+    setChildBenefitCount(prof.childBenefitCount || 0);
+    setBaseEnhancements(prof.baseEnhancements || []);
+    setBaseSacrifices(prof.baseSacrifices || []);
+    setMonths(prof.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+  };
+
+  // Auth state listener - fires once on mount
   useEffect(() => {
-    const saved = localStorage.getItem('taxTrackerDataV14_Profiles');
-    let loadedProfiles = {};
-    if (saved) {
-      loadedProfiles = JSON.parse(saved);
-    } else {
-      // Migrate legacy data if exists
-      const legacy = localStorage.getItem('taxTrackerDataV12');
-      if (legacy) {
-        const d = JSON.parse(legacy);
-        const legacyYear = d.taxYear || '2025/26';
-        loadedProfiles[legacyYear] = d;
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Try to load from Firestore
+        const docRef = doc(db, 'users', user.uid);
+        const snap = await getDoc(docRef);
+        let loadedProfiles = {};
+
+        if (snap.exists()) {
+          loadedProfiles = snap.data().profiles || {};
+        } else {
+          // First login - migrate from localStorage if any
+          const local = localStorage.getItem('taxTrackerDataV14_Profiles');
+          if (local) {
+            loadedProfiles = JSON.parse(local);
+          }
+        }
+
+        // Ensure both years have profile
+        if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = DEFAULT_PROFILE('2025/26');
+        if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = DEFAULT_PROFILE('2024/25');
+
+        setProfiles(loadedProfiles);
+        setTaxYear('2025/26');
+        applyProfile(loadedProfiles['2025/26']);
+        setIsLoaded(true);
+      } else {
+        // Logged out - reset state
+        setIsLoaded(false);
+        setProfiles({});
       }
-    }
-
-    // Ensure default profiles exist
-    if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, holidaySupplementPercent: 8.3, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
-    if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = { taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5, pensionPercent: 5, holidaySupplementPercent: 8.3, studentLoanPlans: [], childBenefitCount: 0, baseEnhancements: [], baseSacrifices: [], months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })) };
-
-    setProfiles(loadedProfiles);
-
-    // Apply active profile (default 2025/26 on startup unless state already tells us otherwise, but since it's mount we use default)
-    const activeProf = loadedProfiles['2025/26'];
-    setTaxYear('2025/26');
-    setTaxCode(activeProf.taxCode || '1257L');
-    setBaseSalary(activeProf.baseSalary || 45000);
-    setContractedHours(activeProf.contractedHours || 37.5);
-    setPensionPercent(activeProf.pensionPercent !== undefined ? activeProf.pensionPercent : 5);
-    setHolidaySupplementPercent(activeProf.holidaySupplementPercent !== undefined ? activeProf.holidaySupplementPercent : 8.3);
-    setStudentLoanPlans(activeProf.studentLoanPlans || []);
-    setChildBenefitCount(activeProf.childBenefitCount || 0);
-    setBaseEnhancements(activeProf.baseEnhancements || []);
-    setBaseSacrifices(activeProf.baseSacrifices || []);
-    setMonths(activeProf.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
-    setIsLoaded(true);
+    });
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Save current state into the active profile
+  // Cloud save - debounced on any data change
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !currentUser) return;
     const updatedProfiles = {
       ...profiles,
       [taxYear]: {
-        taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent, taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
+        taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent,
+        taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
       }
     };
     setProfiles(updatedProfiles);
+    // Save to Firestore
+    const docRef = doc(db, 'users', currentUser.uid);
+    setDoc(docRef, { profiles: updatedProfiles }, { merge: true });
+    // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
   }, [taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
 
@@ -120,17 +151,7 @@ function App() {
   const handleYearSwitch = (newYear) => {
     setTaxYear(newYear);
     const activeProf = profiles[newYear];
-
-    setTaxCode(activeProf.taxCode || '1257L');
-    setBaseSalary(activeProf.baseSalary || 45000);
-    setContractedHours(activeProf.contractedHours || 37.5);
-    setPensionPercent(activeProf.pensionPercent !== undefined ? activeProf.pensionPercent : 5);
-    setHolidaySupplementPercent(activeProf.holidaySupplementPercent !== undefined ? activeProf.holidaySupplementPercent : 8.3);
-    setStudentLoanPlans(activeProf.studentLoanPlans || []);
-    setChildBenefitCount(activeProf.childBenefitCount || 0);
-    setBaseEnhancements(activeProf.baseEnhancements || []);
-    setBaseSacrifices(activeProf.baseSacrifices || []);
-    setMonths(activeProf.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+    applyProfile(activeProf || {});
     setSandboxMode(false);
   };
 
@@ -382,14 +403,29 @@ function App() {
     document.body.removeChild(link);
   };
 
+  // Show loading spinner while auth resolves
+  if (currentUser === undefined) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #1a1f3e 0%, #0a0d1a 100%)' }}>
+        <div style={{ textAlign: 'center', opacity: 0.6 }}>
+          <div style={{ width: '2rem', height: '2rem', border: '3px solid rgba(255,255,255,0.2)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show Auth modal if not logged in
+  if (!currentUser) return <AuthModal />;
+
   return (
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v16.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.0</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.8rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button
             onClick={() => {
               if (!sandboxMode) {
@@ -412,6 +448,19 @@ function App() {
           >
             <Calculator size={16} />
             <span>{sandboxMode ? 'Exit What-If' : 'What-If?'}</span>
+          </button>
+          <div style={{ width: '1px', height: '1.5rem', background: 'rgba(255,255,255,0.15)' }} />
+          <span style={{ fontSize: '0.75rem', opacity: 0.5, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser?.email}</span>
+          <button
+            onClick={() => signOut(auth)}
+            title="Sign Out"
+            style={{
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+              borderRadius: '0.5rem', padding: '0.4rem 0.75rem', color: '#fca5a5',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem'
+            }}
+          >
+            <LogOut size={14} /> Sign Out
           </button>
         </div>
       </header>

@@ -10,6 +10,13 @@
   --error: #f87171;
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;

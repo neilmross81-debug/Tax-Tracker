@@ -425,7 +425,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.2</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.3</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -668,7 +668,9 @@ function App() {
               <div style={{ marginBottom: '1rem' }}>
                 <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                   <span>Monthly Variables</span>
-                  <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer', opacity: 0.7 }} />
+                  <button className="btn-add" onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} title="Add Variable Item">
+                    <Plus size={16} />
+                  </button>
                 </div>
                 {months[selectedMonthIdx].deductions.map(d => (
                   <div key={d.id} className="income-line">
@@ -789,7 +791,9 @@ function App() {
                     <option value="claimed">Claimed</option>
                     <option value="unclaimed">Unclaimed</option>
                   </select>
-                  <button className="btn-primary" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')}><Plus size={20} /></button>
+                  <button className="btn-add" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')} title="Add Overtime">
+                    <Plus size={20} />
+                  </button>
                 </div>
               </div>
 
@@ -887,7 +891,12 @@ function App() {
 
               <div className="dashboard-grid">
                 <div>
-                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Enhancements <Plus size={16} onClick={() => addBaseItem('enhancement')} style={{ cursor: 'pointer' }} /></div>
+                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    Recurring Enhancements
+                    <button className="btn-add" onClick={() => addBaseItem('enhancement')} title="Add Enhancement">
+                      <Plus size={16} />
+                    </button>
+                  </div>
                   {baseEnhancements.map(e => (
                     <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
                       <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
@@ -902,7 +911,12 @@ function App() {
                   ))}
                 </div>
                 <div>
-                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Recurring Sacrifices <Plus size={16} onClick={() => addBaseItem('sacrifice')} style={{ cursor: 'pointer' }} /></div>
+                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    Recurring Sacrifices
+                    <button className="btn-add" onClick={() => addBaseItem('sacrifice')} title="Add Sacrifice">
+                      <Plus size={16} />
+                    </button>
+                  </div>
                   {baseSacrifices.map(d => (
                     <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
                       <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />

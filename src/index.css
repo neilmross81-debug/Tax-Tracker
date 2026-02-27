@@ -61,6 +61,24 @@ body {
   background: var(--primary-hover);
 }
 
+.btn-add {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--primary);
+  padding: 0.3rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-add:hover {
+  background: rgba(99, 102, 241, 0.25);
+  transform: scale(1.1);
+}
+
 .input-field {
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--glass-border);

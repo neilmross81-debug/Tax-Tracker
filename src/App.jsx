@@ -591,69 +591,116 @@ function App() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>Monthly Summary</h2>
                 <select className="input-field" style={{ width: 'auto', fontSize: '1.2rem' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
-                  {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                  {MONTHS.map((m, i) => <option key={m} value={i} style={{ background: '#1e293b', color: 'white' }}>{m}</option>)}
                 </select>
               </div>
 
-              <div style={{ marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Total Gross Monthly:</span>
-                  <span>£{monthlyGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              {/* INCOME LINES */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Payments</div>
+                {currentMonthFull.income.filter(i => Number(i.amount) !== 0).map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>{item.name}</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* GROSS SACRIFICE / PRE-TAX DEDUCTION LINES */}
+              {currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Pre-Tax Deductions</div>
+                  {currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                      <span style={{ opacity: 0.75 }}>{item.name}</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Tax & NI:</span>
-                  <span style={{ color: 'var(--error)' }}>-£{(monthlyResultsAnnualized.incomeTax / 12 + monthlyResultsAnnualized.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              )}
+
+              {/* TAX / NI / STATUTORY DEDUCTIONS */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Statutory Deductions</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                  <span style={{ opacity: 0.75 }}>Income Tax</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.incomeTax / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Pension:</span>
-                  <span style={{ color: 'var(--error)' }}>-£{(monthlyPension).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                  <span style={{ opacity: 0.75 }}>National Insurance</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                  <span style={{ opacity: 0.75 }}>Pension (EE)</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {monthlyResultsAnnualized.studentLoan > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                    <span>Student Loan:</span>
-                    <span style={{ color: 'var(--error)' }}>-£{(monthlyResultsAnnualized.studentLoan / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>Student Loan</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.studentLoan / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 {monthlyResultsAnnualized.hicbc > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                    <span>HICBC (Child Benefit):</span>
-                    <span style={{ color: 'var(--error)' }}>-£{(monthlyResultsAnnualized.hicbc / 12).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>HICBC (Child Benefit)</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.hicbc / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.7 }}>
-                  <span>Net Deductions (Post-Tax):</span>
-                  <span style={{ color: 'var(--error)' }}>-£{monthlyNetSacrifice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
               </div>
 
-              <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>Monthly Variable <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer' }} /></div>
-              {months[selectedMonthIdx].deductions.map(d => (
-                <div key={d.id} className="income-line">
-                  <input placeholder="Name" value={d.name} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'name', e.target.value)} className="input-field" />
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <input
-                      placeholder="Amt"
-                      value={d.amount}
-                      onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', v))}
-                      className="input-field"
-                    />
-                    <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
-                      <option value="salary_sacrifice">Gross Sacrifice</option>
-                      <option value="net_sacrifice">Net Sacrifice</option>
-                      <option value="tax_free">Expense</option>
-                      <option value="income">Income</option>
-                    </select>
-                    <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
-                  </div>
+              {/* NET (POST-TAX) DEDUCTIONS */}
+              {currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).length > 0 && (
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Post-Tax Deductions</div>
+                  {currentMonthFull.deductions.filter(d => d.type === 'net_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                      <span style={{ opacity: 0.75 }}>{item.name}</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              <div style={{ marginTop: '2rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1rem' }}>
+              )}
+
+              {/* MONTHLY VARIABLE ITEMS INPUT */}
+              <div style={{ marginBottom: '1rem' }}>
+                <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span>Monthly Variables</span>
+                  <Plus size={16} onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} style={{ cursor: 'pointer', opacity: 0.7 }} />
+                </div>
+                {months[selectedMonthIdx].deductions.map(d => (
+                  <div key={d.id} className="income-line">
+                    <input placeholder="Name" value={d.name} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'name', e.target.value)} className="input-field" />
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <input
+                        placeholder="Amt"
+                        value={d.amount}
+                        onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'amount', v))}
+                        className="input-field"
+                      />
+                      <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
+                        <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Gross Sacrifice</option>
+                        <option value="net_sacrifice" style={{ background: '#1e293b' }}>Net Sacrifice</option>
+                        <option value="tax_free" style={{ background: '#1e293b' }}>Expense</option>
+                        <option value="income" style={{ background: '#1e293b' }}>Income</option>
+                      </select>
+                      <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.75rem', opacity: 0.6 }}>
+                  <span>Total Gross</span>
+                  <span>£{monthlyGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="stat-label" style={{ margin: 0 }}>Estimated Net Pay:</span>
                   <strong style={{ fontSize: '1.5rem', color: 'var(--success)' }}>£{totalMonthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                 </div>
               </div>
             </div>
+
 
             <div className="glass-card">
               <h2 style={{ margin: 0, marginBottom: '1.5rem' }}>Wealth Breakdown</h2>

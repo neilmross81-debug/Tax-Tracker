@@ -756,7 +756,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.4</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.5</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1080,21 +1080,6 @@ function App() {
             </div>
 
 
-            <div className="glass-card">
-              <h2 style={{ margin: 0, marginBottom: '1.5rem' }}>Wealth Breakdown</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
-                <DonutChart data={chartData} />
-                <div style={{ width: '100%', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.8rem' }}>
-                  {chartData.map(i => (
-                    <div key={i.name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
-                      <div style={{ width: '12px', height: '12px', borderRadius: '2px', background: i.color }}></div>
-                      <span style={{ opacity: 0.7 }}>{i.name}</span>
-                      <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>{Math.round((i.value / (monthlyGross || 1)) * 100)}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
             <div className="glass-card">
               <h2 style={{ margin: 0 }}>Annual Forecast</h2>

@@ -372,6 +372,7 @@ function App() {
         monthIdx: monthIdx,
         gross: monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome,
         ot: otTotal,
+        holidaySupplement: holidaySupplementAmount,
         pension: pension,
         taxFree: varTaxFree,
         incomeItems: mappedEnhancements,
@@ -756,7 +757,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.6</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.7</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -954,6 +955,12 @@ function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>Overtime</span>
                     <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.ot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {currentMonthFull.holidaySupplement > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>OT Holiday Supp. ({holidaySupplementPercent}%)</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.holidaySupplement.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>

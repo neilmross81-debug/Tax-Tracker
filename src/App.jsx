@@ -48,6 +48,7 @@ function App() {
   const [baseSalary, setBaseSalary] = useState(45000);
   const [contractedHours, setContractedHours] = useState(37.5);
   const [pensionPercent, setPensionPercent] = useState(5);
+  const [pensionType, setPensionType] = useState('standard'); // 'standard' | 'salary_sacrifice'
   const [taxYear, setTaxYear] = useState('2025/26');
   const [studentLoanPlans, setStudentLoanPlans] = useState([]); // plan1, plan2, plan4, plan5, pgl
   const [childBenefitCount, setChildBenefitCount] = useState(0);
@@ -72,7 +73,7 @@ function App() {
 
   const DEFAULT_PROFILE = (year) => ({
     taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5,
-    pensionPercent: 5, holidaySupplementPercent: 8.3,
+    pensionPercent: 5, pensionType: 'standard', holidaySupplementPercent: 8.3,
     studentLoanPlans: [], childBenefitCount: 0,
     baseEnhancements: [], baseSacrifices: [],
     months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] }))
@@ -83,6 +84,7 @@ function App() {
     setBaseSalary(prof.baseSalary || 45000);
     setContractedHours(prof.contractedHours || 37.5);
     setPensionPercent(prof.pensionPercent !== undefined ? prof.pensionPercent : 5);
+    setPensionType(prof.pensionType || 'standard');
     setHolidaySupplementPercent(prof.holidaySupplementPercent !== undefined ? prof.holidaySupplementPercent : 8.3);
     setStudentLoanPlans(prof.studentLoanPlans || []);
     setChildBenefitCount(prof.childBenefitCount || 0);
@@ -135,7 +137,7 @@ function App() {
     const updatedProfiles = {
       ...profiles,
       [taxYear]: {
-        taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent,
+        taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent,
         taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
       }
     };
@@ -145,7 +147,7 @@ function App() {
     setDoc(docRef, { profiles: updatedProfiles }, { merge: true });
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -250,7 +252,8 @@ function App() {
   const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
     taxYear,
     studentLoanPlans,
-    childBenefitCount
+    childBenefitCount,
+    pensionIsSS: pensionType === 'salary_sacrifice'
   });
 
   // 4. Current Selected Month Summary Logic
@@ -266,7 +269,7 @@ function App() {
     monthlyGrossSacrifice * 12,
     taxCode,
     monthlyNetSacrifice * 12,
-    { taxYear, studentLoanPlans, childBenefitCount }
+    { taxYear, studentLoanPlans, childBenefitCount, pensionIsSS: pensionType === 'salary_sacrifice' }
   );
 
   const totalMonthlyNet = (monthlyResultsAnnualized.annualTakeHome / 12) + currentMonthFull.taxFree;
@@ -422,7 +425,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.2</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -851,6 +854,13 @@ function App() {
                 <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
                 <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
+                <div>
+                  <label className="stat-label">Pension Type (Mercer SS?)</label>
+                  <select value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
+                    <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
+                    <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Mercer)</option>
+                  </select>
+                </div>
                 <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
                 <div><label className="stat-label">Children (Child Benefit)</label><input type="number" value={childBenefitCount} onChange={(e) => handleNumericInput(e.target.value, setChildBenefitCount)} className="input-field" /></div>
               </div>

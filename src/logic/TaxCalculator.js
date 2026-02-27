@@ -115,15 +115,18 @@ export const calculateTax = (annualGross, pensionContribution = 0, salarySacrifi
         }
     }
 
-    // National Insurance
+    // National Insurance - calculated on gross minus salary sacrifice (and pension if SS scheme)
     let ni = 0;
-    if (annualGross > config.niThreshold) {
-        const mainBand = Math.min(annualGross, config.niUpperLimit) - config.niThreshold;
+    const pensionIsSS = options.pensionIsSS || false;
+    const niableGross = Math.max(0, annualGross - salarySacrifice - (pensionIsSS ? pensionContribution : 0));
+    if (niableGross > config.niThreshold) {
+        const mainBand = Math.min(niableGross, config.niUpperLimit) - config.niThreshold;
         ni += mainBand * config.niMainRate;
-        if (annualGross > config.niUpperLimit) {
-            ni += (annualGross - config.niUpperLimit) * 0.02;
+        if (niableGross > config.niUpperLimit) {
+            ni += (niableGross - config.niUpperLimit) * 0.02;
         }
     }
+
 
     // Student Loans
     let studentLoan = 0;
@@ -178,6 +181,8 @@ export const calculateOvertime = (annualSalary, contractedHours, otHours, multip
     const hourlyRate = (annualSalary / 52) / contractedHours;
     return round(hourlyRate * (otHours || 0) * multiplier);
 };
+
+
 
 export const projectAnnual = (monthsActualData, futureBaseData, currentMonthIndex, taxCode, options = {}) => {
     let ytdGross = 0;

@@ -66,6 +66,10 @@ function App() {
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
+  // --- Tour State ---
+  const [tourStep, setTourStep] = useState(null); // null or index
+  const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
+
   // --- Persistence Logic (v17.0 - Firebase Cloud Sync) ---
   const [currentUser, setCurrentUser] = useState(undefined); // undefined = loading, null = logged out
   const [profiles, setProfiles] = useState({});
@@ -76,7 +80,8 @@ function App() {
     pensionPercent: 5, pensionType: 'standard', holidaySupplementPercent: 8.3,
     studentLoanPlans: [], childBenefitCount: 0,
     baseEnhancements: [], baseSacrifices: [],
-    months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] }))
+    months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })),
+    hasCompletedTour: false // New users get the tour
   });
 
   const applyProfile = (prof) => {
@@ -91,6 +96,7 @@ function App() {
     setBaseEnhancements(prof.baseEnhancements || []);
     setBaseSacrifices(prof.baseSacrifices || []);
     setMonths(prof.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+    setHasCompletedTour(prof.hasCompletedTour !== undefined ? prof.hasCompletedTour : true);
   };
 
   // Auth state listener - fires once on mount
@@ -98,38 +104,171 @@ function App() {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        // Try to load from Firestore
-        const docRef = doc(db, 'users', user.uid);
-        const snap = await getDoc(docRef);
-        let loadedProfiles = {};
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const snap = await getDoc(userDocRef);
+          let loadedProfiles = {};
 
-        if (snap.exists()) {
-          loadedProfiles = snap.data().profiles || {};
-        } else {
-          // First login - migrate from localStorage if any
-          const local = localStorage.getItem('taxTrackerDataV14_Profiles');
-          if (local) {
-            loadedProfiles = JSON.parse(local);
+          if (snap.exists()) {
+            loadedProfiles = snap.data().profiles || {};
+          } else {
+            // First login - migrate from localStorage if any
+            const local = localStorage.getItem('taxTrackerDataV14_Profiles');
+            if (local) {
+              loadedProfiles = JSON.parse(local);
+              // Save migrated data to Firestore immediately
+              await setDoc(userDocRef, { profiles: loadedProfiles }, { merge: true });
+            }
           }
+
+          // Ensure both years have profile
+          if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = DEFAULT_PROFILE('2025/26');
+          if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = DEFAULT_PROFILE('2024/25');
+
+          setProfiles(loadedProfiles);
+          setTaxYear('2025/26'); // Always start on the current tax year
+          applyProfile(loadedProfiles['2025/26']);
+          setIsLoaded(true);
+        } catch (e) {
+          console.error("Load error:", e);
+          setIsLoaded(true);
         }
-
-        // Ensure both years have profile
-        if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = DEFAULT_PROFILE('2025/26');
-        if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = DEFAULT_PROFILE('2024/25');
-
-        setProfiles(loadedProfiles);
-        setTaxYear('2025/26');
-        applyProfile(loadedProfiles['2025/26']);
-        setIsLoaded(true);
       } else {
         // Logged out - reset state
         setIsLoaded(false);
         setProfiles({});
+        // Apply a default profile for anonymous use
+        applyProfile(DEFAULT_PROFILE('2025/26'));
       }
     });
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => unsub();
   }, []);
+
+  // Trigger tour if not completed
+  useEffect(() => {
+    if (isLoaded && currentUser && !hasCompletedTour && tourStep === null) {
+      setTourStep(0);
+    }
+  }, [isLoaded, currentUser, hasCompletedTour]);
+
+  // --- Tour Steps Definition ---
+  const tourSteps = [
+    {
+      title: "Welcome to Tax Tracker!",
+      content: "Let's take a 30-second tour to set up your profile for maximum accuracy.",
+      target: null, // Center screen
+      tab: 'config'
+    },
+    {
+      title: "1. Base Salary",
+      content: "Enter your annual gross salary here. This is the foundation for all calculations.",
+      target: "#tour-salary",
+      tab: 'config'
+    },
+    {
+      title: "2. Mercer (Salary Sacrifice)",
+      content: "If you have a Mercer pension or other Salary Sacrifice scheme, select it here to see your extra NI savings!",
+      target: "#tour-pension-type",
+      tab: 'config'
+    },
+    {
+      title: "3. Monthly Summary",
+      content: "View your itemized breakdown here. It mirrors a real payslip, showing every payment and deduction.",
+      target: "#tour-summary",
+      tab: 'dashboard'
+    },
+    {
+      title: "4. Overtime Tracker",
+      content: "Log your extra hours here. We'll track what's unclaimed so you never miss a penny.",
+      target: "#tour-ot-log",
+      tab: 'overtime'
+    }
+  ];
+
+  const handleNextTour = () => {
+    if (tourStep < tourSteps.length - 1) {
+      const nextStep = tourStep + 1;
+      if (tourSteps[nextStep].tab) {
+        setActiveTab(tourSteps[nextStep].tab);
+      }
+      setTourStep(nextStep);
+    } else {
+      completeTour();
+    }
+  };
+
+  const completeTour = () => {
+    setTourStep(null);
+    setHasCompletedTour(true);
+    // Persist to Firebase if possible
+    if (currentUser) {
+      const userDoc = doc(db, 'users', currentUser.uid);
+      setDoc(userDoc, { profiles: { [taxYear]: { hasCompletedTour: true } } }, { merge: true });
+    }
+  };
+
+  const TourOverlay = () => {
+    const step = tourSteps[tourStep];
+    const [style, setStyle] = useState({});
+
+    useEffect(() => {
+      if (step && step.target) {
+        const el = document.querySelector(step.target);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const padding = 10;
+          const x = rect.left + rect.width / 2;
+          const y = rect.top + rect.height / 2;
+          const r = Math.max(rect.width, rect.height) / 2 + padding;
+
+          document.documentElement.style.setProperty('--spotlight-x', `${x}px`);
+          document.documentElement.style.setProperty('--spotlight-y', `${y}px`);
+          document.documentElement.style.setProperty('--spotlight-r', `${r}px`);
+
+          // Position modal
+          const modalX = x > window.innerWidth / 2 ? x - 180 : x + 180;
+          const modalY = y > window.innerHeight / 2 ? y - 120 : y + 120;
+
+          // Constrain within viewport
+          const finalX = Math.max(160, Math.min(window.innerWidth - 160, modalX));
+          const finalY = Math.max(100, Math.min(window.innerHeight - 300, modalY));
+
+          setStyle({
+            '--modal-x': `${finalX}px`,
+            '--modal-y': `${finalY}px`
+          });
+
+          el.classList.add('tour-target-highlight');
+          return () => el.classList.remove('tour-target-highlight');
+        }
+      } else {
+        // Reset spotlight to center
+        document.documentElement.style.setProperty('--spotlight-x', `50%`);
+        document.documentElement.style.setProperty('--spotlight-y', `50%`);
+        document.documentElement.style.setProperty('--spotlight-r', `0px`);
+        setStyle({ '--modal-x': '50%', '--modal-y': '50%' });
+      }
+    }, [tourStep]);
+
+    if (tourStep === null || !tourSteps[tourStep]) return null;
+
+    return (
+      <div className="tour-overlay">
+        <div className="glass-card tour-modal" style={style}>
+          <div className="tour-step-indicator">STEP {tourStep + 1} OF {tourSteps.length}</div>
+          <h3 style={{ margin: '0 0 0.5rem 0' }}>{step.title}</h3>
+          <p style={{ fontSize: '0.9rem', opacity: 0.8, lineHeight: 1.4 }}>{step.content}</p>
+          <div className="tour-controls">
+            <button className="btn-secondary" onClick={() => setTourStep(null)}>Skip</button>
+            <button className="btn-primary" onClick={handleNextTour}>
+              {tourStep === tourSteps.length - 1 ? 'Finish' : 'Next'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Cloud save - debounced on any data change
   useEffect(() => {
@@ -425,7 +564,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.4</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v18.0</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -590,7 +729,7 @@ function App() {
       <main style={{ paddingBottom: '5rem' }}>
         {activeTab === 'dashboard' && (
           <div className="dashboard-grid">
-            <div className="glass-card">
+            <div className="glass-card" id="tour-summary">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>Monthly Summary</h2>
                 <select className="input-field" style={{ width: 'auto', fontSize: '1.2rem' }} value={selectedMonthIdx} onChange={(e) => setSelectedMonthIdx(Number(e.target.value))}>
@@ -799,7 +938,7 @@ function App() {
                     <option value="claimed">Claimed</option>
                     <option value="unclaimed">Unclaimed</option>
                   </select>
-                  <button className="btn-add" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')} title="Add Overtime">
+                  <button id="tour-ot-log" className="btn-add" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')} title="Add Overtime">
                     <Plus size={20} />
                   </button>
                 </div>
@@ -862,13 +1001,13 @@ function App() {
                     <option value="2024/25">2024/25 (Current)</option>
                   </select>
                 </div>
-                <div><label className="stat-label">Annual Salary (£)</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
+                <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
                 <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
                 <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
                 <div>
                   <label className="stat-label">Pension Type (Mercer SS?)</label>
-                  <select value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
+                  <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
                     <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
                     <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Mercer)</option>
                   </select>
@@ -981,6 +1120,8 @@ function App() {
           <span>Settings</span>
         </div>
       </nav>
+
+      {tourStep !== null && <TourOverlay />}
     </div>
   );
 }

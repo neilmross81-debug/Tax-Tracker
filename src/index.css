@@ -234,6 +234,54 @@ select.input-field {
   color: white;
 }
 
+/* --- Interactive Tour Styles --- */
+.tour-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%), transparent var(--spotlight-r, 0px), rgba(0, 0, 0, 0.8) calc(var(--spotlight-r, 0px) + 2px));
+  transition: background 0.3s ease;
+}
+
+.tour-overlay * {
+  pointer-events: auto;
+}
+
+.tour-modal {
+  position: absolute;
+  top: var(--modal-y, 50%);
+  left: var(--modal-x, 50%);
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 320px;
+  z-index: 10001;
+}
+
+.tour-step-indicator {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  margin-bottom: 0.5rem;
+}
+
+.tour-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+  gap: 0.5rem;
+}
+
+.tour-target-highlight {
+  position: relative;
+  z-index: 10002 !important;
+  pointer-events: auto !important;
+  box-shadow: 0 0 0 4px var(--primary), 0 0 20px rgba(99, 102, 241, 0.5) !important;
+  transition: all 0.3s ease;
+}
+
 @media print {
 
   .nav-bar,

@@ -425,7 +425,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.3</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v17.4</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -610,9 +610,15 @@ function App() {
               </div>
 
               {/* GROSS SACRIFICE / PRE-TAX DEDUCTION LINES */}
-              {currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 && (
+              {(currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).length > 0 || (pensionType === 'salary_sacrifice' && monthlyPension > 0)) && (
                 <div style={{ marginBottom: '1.25rem' }}>
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Pre-Tax Deductions</div>
+                  {pensionType === 'salary_sacrifice' && monthlyPension > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                      <span style={{ opacity: 0.75 }}>Pension (Mercer SS)</span>
+                      <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   {currentMonthFull.deductions.filter(d => d.type === 'salary_sacrifice' && Number(d.amount) !== 0).map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                       <span style={{ opacity: 0.75 }}>{item.name}</span>
@@ -633,10 +639,12 @@ function App() {
                   <span style={{ opacity: 0.75 }}>National Insurance</span>
                   <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                  <span style={{ opacity: 0.75 }}>Pension (EE)</span>
-                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
+                {pensionType !== 'salary_sacrifice' && monthlyPension > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>Pension (EE)</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 {monthlyResultsAnnualized.studentLoan > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>Student Loan</span>

@@ -68,7 +68,10 @@ function App() {
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
   // --- Tour State ---
-  const [tourStep, setTourStep] = useState(null); // null or index
+  const [tourStep, setTourStep] = useState(null);
+  const [showOtModal, setShowOtModal] = useState(false);
+  const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
+  // null or index
   const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
 
   // --- Persistence Logic (v17.0 - Firebase Cloud Sync) ---
@@ -342,7 +345,10 @@ function App() {
     const sandboxOtMonthly = (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0);
 
     return months.map((m, monthIdx) => {
-      const otTotal = m.overtime.reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0) + sandboxOtMonthly;
+      const ot15 = m.overtime.filter(o => o.multiplier === 1.5).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const ot20 = m.overtime.filter(o => o.multiplier === 2.0).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const otTotal = ot15 + ot20 + sandboxOtMonthly;
+
       const holidaySupplementAmount = otTotal > 0 ? (otTotal * (holidaySupplementPercent / 100)) : 0;
 
       const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + holidaySupplementAmount;
@@ -372,6 +378,8 @@ function App() {
         monthIdx: monthIdx,
         gross: monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome,
         ot: otTotal,
+        ot15,
+        ot20,
         holidaySupplement: holidaySupplementAmount,
         pension: pension,
         taxFree: varTaxFree,
@@ -757,7 +765,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v19.7</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.0</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -951,10 +959,16 @@ function App() {
                     <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
-                {currentMonthFull.ot > 0 && (
+                {currentMonthFull.ot15 > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                    <span style={{ opacity: 0.75 }}>Overtime</span>
-                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.ot.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span style={{ opacity: 0.75 }}>1.5x Overtime</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.ot15.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {currentMonthFull.ot20 > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>2.0x Overtime</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 500 }}>+£{currentMonthFull.ot20.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
                 {currentMonthFull.holidaySupplement > 0 && (
@@ -1144,60 +1158,55 @@ function App() {
                 </div>
               </div>
             </div>
+            <div className="glass-card" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+              <button
+                className="btn-primary btn-full btn-add"
+                style={{ height: '3.5rem', fontSize: '1.1rem' }}
+                onClick={() => {
+                  setOtModalData({ ...otModalData, monthIdx: selectedMonthIdx });
+                  setShowOtModal(true);
+                }}
+              >
+                <Plus size={24} /> Add Overtime Entry
+              </button>
+            </div>
 
-            <div className="glass-card">
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center', gap: '1rem' }}>
-                <h2 style={{ margin: 0 }}>Overtime Tracker</h2>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <select className="input-field" style={{ width: 'auto' }} value={otFilterMonth} onChange={(e) => setOtFilterMonth(e.target.value)}>
+            <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', opacity: 0.7 }}>OT Summary</h3>
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <select className="input-field" style={{ width: 'auto', padding: '0.3rem', fontSize: '0.8rem' }} value={otFilterMonth} onChange={(e) => setOtFilterMonth(e.target.value)}>
                     <option value="all">All Months</option>
                     {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                   </select>
-                  <select className="input-field" style={{ width: 'auto' }} value={otFilterClaimed} onChange={(e) => setOtFilterClaimed(e.target.value)}>
-                    <option value="all">Status: All</option>
+                  <select className="input-field" style={{ width: 'auto', padding: '0.3rem', fontSize: '0.8rem' }} value={otFilterClaimed} onChange={(e) => setOtFilterClaimed(e.target.value)}>
+                    <option value="all">All</option>
                     <option value="claimed">Claimed</option>
                     <option value="unclaimed">Unclaimed</option>
                   </select>
-                  <button id="tour-ot-log" className="btn-add" style={{ padding: '0.5rem' }} onClick={() => addMonthItem(otFilterMonth === 'all' ? selectedMonthIdx : Number(otFilterMonth), 'overtime')} title="Add Overtime">
-                    <Plus size={20} />
-                  </button>
                 </div>
               </div>
+            </div>
 
+            <div className="overtime-list">
               {filteredOT.map(o => (
-                <div key={o.id} className="overtime-line" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', paddingLeft: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '0.5rem', marginBottom: '1rem', paddingBottom: '0.5rem', paddingTop: '0.5rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                    <select
-                      value={o.monthIdx}
-                      onChange={(e) => moveOvertimeItem(o.monthIdx, Number(e.target.value), o.id)}
-                      className="input-field"
-                      style={{ fontSize: '0.75rem', padding: '0.2rem', width: 'auto', background: 'rgba(255,255,255,0.1)' }}
-                    >
-                      {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                    </select>
-                    <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>Month Assignment</span>
-                  </div>
-                  <div className="ot-row">
-                    <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
-                      {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
-                    </button>
-                    <input type="date" value={o.date} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'date', e.target.value)} className="input-field" style={{ fontSize: '0.8rem' }} />
-                    <input placeholder="Reason" value={o.reason} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'reason', e.target.value)} className="input-field" />
-                    <input
-                      placeholder="Hrs"
-                      value={o.hours}
-                      onChange={(e) => handleNumericInput(e.target.value, (v) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'hours', v))}
-                      className="input-field"
-                    />
-
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <select value={o.multiplier} onChange={(e) => updateMonthItem(o.monthIdx, 'overtime', o.id, 'multiplier', Number(e.target.value))} className="input-field" style={{ fontSize: '0.8rem', padding: '0.2rem' }}>
-                        <option value={1.5}>1.5x</option><option value={2}>2x</option>
-                      </select>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.5, textAlign: 'center' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toLocaleString()}</span>
+                <div key={o.id} className="overtime-line glass-card" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', marginBottom: '1rem', padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                      <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
+                        {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
+                      </button>
+                      <div>
+                        <div style={{ fontWeight: 'bold' }}>{o.hours}h @ {o.multiplier}x</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{o.date} • {MONTHS[o.monthIdx]}</div>
+                      </div>
                     </div>
-                    <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--success)' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <button className="btn-icon" style={{ color: 'var(--error)', marginLeft: 'auto' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
+                    </div>
                   </div>
+                  {o.reason && <div style={{ fontSize: '0.85rem', padding: '0.5rem', background: 'rgba(0,0,0,0.1)', borderRadius: '0.4rem', marginTop: '0.5rem', borderLeft: '2px solid rgba(255,255,255,0.05)' }}>{o.reason}</div>}
                 </div>
               ))}
               {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged.</p>}
@@ -1344,6 +1353,74 @@ function App() {
           <span>Settings</span>
         </div>
       </nav>
+
+      {showOtModal && (
+        <div className="modal-overlay" onClick={() => setShowOtModal(false)}>
+          <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0 }}>Add Overtime</h2>
+              <button className="btn-icon" onClick={() => setShowOtModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 4, multiplier: 1.5 })}>4h @ 1.5x</button>
+              <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 12, multiplier: 2.0 })}>12h @ 2.0x</button>
+            </div>
+
+            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: 0 }}>
+              <div>
+                <label className="stat-label">Month</label>
+                <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>
+                  {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="stat-label">Date</label>
+                <input type="date" className="input-field" value={otModalData.date} onChange={e => setOtModalData({ ...otModalData, date: e.target.value })} />
+              </div>
+              <div>
+                <label className="stat-label">Hours</label>
+                <input type="number" className="input-field" value={otModalData.hours} onChange={e => handleNumericInput(e.target.value, (v) => setOtModalData({ ...otModalData, hours: v }))} placeholder="0" />
+              </div>
+              <div>
+                <label className="stat-label">Multiplier</label>
+                <select className="input-field" value={otModalData.multiplier} onChange={e => setOtModalData({ ...otModalData, multiplier: Number(e.target.value) })}>
+                  <option value={1.5}>1.5x</option>
+                  <option value={2.0}>2.0x</option>
+                  <option value={1.0}>1.0x</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label className="stat-label">Reason / Reference</label>
+                <input className="input-field" value={otModalData.reason} onChange={e => setOtModalData({ ...otModalData, reason: e.target.value })} placeholder="e.g. Weekend Coverage" />
+              </div>
+            </div>
+
+            <button
+              className="btn-primary btn-full"
+              style={{ marginTop: '2rem' }}
+              onClick={() => {
+                const newItem = {
+                  id: Date.now(),
+                  date: otModalData.date,
+                  reason: otModalData.reason,
+                  hours: Number(otModalData.hours) || 0,
+                  multiplier: otModalData.multiplier,
+                  claimed: false,
+                  monthIdx: otModalData.monthIdx
+                };
+                const newMonths = [...months];
+                newMonths[otModalData.monthIdx].overtime = [newItem, ...newMonths[otModalData.monthIdx].overtime];
+                setMonths(newMonths);
+                setShowOtModal(false);
+                setOtModalData({ ...otModalData, hours: '', reason: '' });
+              }}
+            >
+              Add Entry
+            </button>
+          </div>
+        </div>
+      )}
 
       {tourStep !== null && <TourOverlay />}
     </div>

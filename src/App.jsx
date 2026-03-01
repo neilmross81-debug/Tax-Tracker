@@ -345,8 +345,8 @@ function App() {
     const sandboxOtMonthly = (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0);
 
     return months.map((m, monthIdx) => {
-      const ot15 = m.overtime.filter(o => o.multiplier === 1.5).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
-      const ot20 = m.overtime.filter(o => o.multiplier === 2.0).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const ot15 = m.overtime.filter(o => o.claimed && o.multiplier === 1.5).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const ot20 = m.overtime.filter(o => o.claimed && o.multiplier === 2.0).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
       const otTotal = ot15 + ot20 + sandboxOtMonthly;
 
       const holidaySupplementAmount = otTotal > 0 ? (otTotal * (holidaySupplementPercent / 100)) : 0;
@@ -1378,7 +1378,7 @@ function App() {
 
             <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: 0 }}>
               <div>
-                <label className="stat-label">Month</label>
+                <label className="stat-label">Month Paid</label>
                 <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>
                   {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
                 </select>

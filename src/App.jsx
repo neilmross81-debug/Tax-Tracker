@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -765,7 +765,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.2</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.3</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1201,7 +1201,10 @@ function App() {
                       </button>
                       <div>
                         <div style={{ fontWeight: 'bold' }}>{o.hours}h @ {o.multiplier}x</div>
-                        <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{o.date} • {MONTHS[o.monthIdx]}</div>
+                        <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                          {o.date} • {MONTHS[o.monthIdx]}
+                          <span style={{ marginLeft: '0.5rem', opacity: 0.7 }}>#OT-{String(o.id).slice(-6)}</span>
+                        </div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -1213,9 +1216,12 @@ function App() {
                 </div>
               ))}
               {filteredOT.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '2rem 0' }}>No overtime logged.</p>}
-              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+              <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
                 <button onClick={exportUnclaimedOT} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
                   <Download size={14} style={{ marginRight: '0.5rem' }} /> Export Unclaimed OT (.csv)
+                </button>
+                <button onClick={() => window.print()} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
+                  <Printer size={14} style={{ marginRight: '0.5rem' }} /> Print / PDF Report
                 </button>
               </div>
             </div>

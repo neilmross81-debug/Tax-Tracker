@@ -793,18 +793,20 @@ function App() {
             <span>{sandboxMode ? 'Exit What-If' : 'What-If?'}</span>
           </button>
           <div style={{ width: '1px', height: '1.5rem', background: 'rgba(255,255,255,0.15)' }} />
-          <span style={{ fontSize: '0.75rem', opacity: 0.5, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser?.email}</span>
-          <button
-            onClick={() => signOut(auth)}
-            title="Sign Out"
-            style={{
-              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-              borderRadius: '0.5rem', padding: '0.4rem 0.75rem', color: '#fca5a5',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem'
-            }}
-          >
-            <LogOut size={14} /> Sign Out
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
+            <span style={{ fontSize: '0.75rem', opacity: 0.5, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser?.email}</span>
+            <button
+              onClick={() => signOut(auth)}
+              title="Sign Out"
+              style={{
+                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: '0.4rem', padding: '0.25rem 0.5rem', color: '#fca5a5',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem'
+              }}
+            >
+              <LogOut size={12} /> Sign Out
+            </button>
+          </div>
         </div>
       </header>
 

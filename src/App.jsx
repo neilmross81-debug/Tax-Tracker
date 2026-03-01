@@ -1334,6 +1334,9 @@ function App() {
                 <button onClick={() => window.print()} className="btn-secondary">
                   <LayoutDashboard size={14} style={{ marginRight: '0.5rem' }} /> Print PDF Report
                 </button>
+                <button onClick={clearCacheAndReload} className="btn-secondary" style={{ opacity: 0.5 }}>
+                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Force Update
+                </button>
               </div>
             </div>
           </div>

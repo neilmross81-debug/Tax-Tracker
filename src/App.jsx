@@ -765,7 +765,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.0</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.1</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1145,6 +1145,19 @@ function App() {
 
         {activeTab === 'overtime' && (
           <div>
+            <div className="glass-card" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+              <button
+                className="btn-primary btn-full btn-add btn-prominent"
+                style={{ height: '3.5rem', fontSize: '1.1rem' }}
+                onClick={() => {
+                  setOtModalData({ ...otModalData, monthIdx: selectedMonthIdx });
+                  setShowOtModal(true);
+                }}
+              >
+                <Plus size={24} /> Add Overtime Entry
+              </button>
+            </div>
+
             <div className="glass-card" style={{ marginBottom: '2rem' }}>
               <h2 style={{ margin: 0 }}>Overtime Summary</h2>
               <div className="dashboard-grid" style={{ marginTop: '1.5rem' }}>
@@ -1157,18 +1170,6 @@ function App() {
                   <div className="stat-value" style={{ color: 'var(--error)' }}>£{allOvertime.filter(o => !o.claimed).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </div>
               </div>
-            </div>
-            <div className="glass-card" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
-              <button
-                className="btn-primary btn-full btn-add"
-                style={{ height: '3.5rem', fontSize: '1.1rem' }}
-                onClick={() => {
-                  setOtModalData({ ...otModalData, monthIdx: selectedMonthIdx });
-                  setShowOtModal(true);
-                }}
-              >
-                <Plus size={24} /> Add Overtime Entry
-              </button>
             </div>
 
             <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>

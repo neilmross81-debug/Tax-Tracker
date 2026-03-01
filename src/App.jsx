@@ -765,7 +765,7 @@ function App() {
     <div className="app-container">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.3</span></h1>
+          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.5</span></h1>
           <p>UK Tax Year {taxYear} - Professional Grade</p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -1323,7 +1323,6 @@ function App() {
 
               <div className="card" style={{ marginTop: '1.5rem', opacity: 0.5 }}>
                 <div style={{ fontSize: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <button className="btn-icon" onClick={() => { localStorage.removeItem('taxTrackerDataV12'); window.location.reload(); }}>Reset & Update Code</button>
                   <p>© 2026 taxtracker.uk - Accurate logic based on HMRC 25/26 guidelines.</p>
                 </div>
               </div>
@@ -1334,9 +1333,6 @@ function App() {
                 </button>
                 <button onClick={() => window.print()} className="btn-secondary">
                   <LayoutDashboard size={14} style={{ marginRight: '0.5rem' }} /> Print PDF Report
-                </button>
-                <button onClick={clearCacheAndReload} className="btn-secondary" style={{ opacity: 0.5 }}>
-                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Force Reset & Update
                 </button>
               </div>
             </div>

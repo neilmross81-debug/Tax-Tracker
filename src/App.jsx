@@ -1152,7 +1152,7 @@ function App() {
                 className="btn-primary btn-full btn-add btn-prominent"
                 style={{ height: '3.5rem', fontSize: '1.1rem' }}
                 onClick={() => {
-                  setOtModalData({ ...otModalData, monthIdx: selectedMonthIdx });
+                  setOtModalData({ id: null, date: new Date().toISOString().split('T')[0], hours: '', multiplier: 1.5, reason: '', monthIdx: selectedMonthIdx });
                   setShowOtModal(true);
                 }}
               >
@@ -1193,10 +1193,10 @@ function App() {
 
             <div className="overtime-list">
               {filteredOT.map(o => (
-                <div key={o.id} className="overtime-line glass-card" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', marginBottom: '1rem', padding: '1rem' }}>
+                <div key={o.id} className="overtime-line glass-card clickable" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', marginBottom: '1rem', padding: '1rem' }} onClick={() => { setOtModalData({ id: o.id, date: o.date || '', hours: o.hours, multiplier: o.multiplier, reason: o.reason || '', monthIdx: o.monthIdx }); setShowOtModal(true); }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                      <button className="btn-icon" onClick={() => updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed)}>
+                      <button className="btn-icon" onClick={(e) => { e.stopPropagation(); updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed); }}>
                         {o.claimed ? <CheckSquare size={20} color="var(--success)" /> : <Square size={20} opacity={0.4} />}
                       </button>
                       <div>
@@ -1206,7 +1206,7 @@ function App() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontWeight: 600, color: 'var(--success)' }}>£{calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                      <button className="btn-icon" style={{ color: 'var(--error)', marginLeft: 'auto' }} onClick={() => removeMonthItem(o.monthIdx, 'overtime', o.id)}><Trash2 size={16} /></button>
+                      <button className="btn-icon" style={{ color: 'var(--error)', marginLeft: 'auto' }} onClick={(e) => { e.stopPropagation(); removeMonthItem(o.monthIdx, 'overtime', o.id); }}><Trash2 size={16} /></button>
                     </div>
                   </div>
                   {o.reason && <div style={{ fontSize: '0.85rem', padding: '0.5rem', background: 'rgba(0,0,0,0.1)', borderRadius: '0.4rem', marginTop: '0.5rem', borderLeft: '2px solid rgba(255,255,255,0.05)' }}>{o.reason}</div>}
@@ -1361,7 +1361,7 @@ function App() {
         <div className="modal-overlay" onClick={() => setShowOtModal(false)}>
           <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0 }}>Add Overtime</h2>
+              <h2 style={{ margin: 0 }}>{otModalData.id ? 'Edit Overtime Entry' : 'Add Overtime'}</h2>
               <button className="btn-icon" onClick={() => setShowOtModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
             </div>
 
@@ -1403,23 +1403,33 @@ function App() {
               className="btn-primary btn-full"
               style={{ marginTop: '2rem' }}
               onClick={() => {
-                const newItem = {
-                  id: Date.now(),
-                  date: otModalData.date,
-                  reason: otModalData.reason,
-                  hours: Number(otModalData.hours) || 0,
-                  multiplier: otModalData.multiplier,
-                  claimed: false,
-                  monthIdx: otModalData.monthIdx
-                };
                 const newMonths = [...months];
-                newMonths[otModalData.monthIdx].overtime = [newItem, ...newMonths[otModalData.monthIdx].overtime];
+                if (otModalData.id) {
+                  // Edit mode
+                  const currentMonthItems = newMonths[otModalData.monthIdx].overtime;
+                  const itemIndex = currentMonthItems.findIndex(i => i.id === otModalData.id);
+                  if (itemIndex > -1) {
+                    currentMonthItems[itemIndex] = { ...currentMonthItems[itemIndex], date: otModalData.date, reason: otModalData.reason, hours: Number(otModalData.hours) || 0, multiplier: otModalData.multiplier };
+                  }
+                } else {
+                  // Add mode
+                  const newItem = {
+                    id: Date.now(),
+                    date: otModalData.date,
+                    reason: otModalData.reason,
+                    hours: Number(otModalData.hours) || 0,
+                    multiplier: otModalData.multiplier,
+                    claimed: false,
+                    monthIdx: otModalData.monthIdx
+                  };
+                  newMonths[otModalData.monthIdx].overtime = [newItem, ...newMonths[otModalData.monthIdx].overtime];
+                }
                 setMonths(newMonths);
                 setShowOtModal(false);
-                setOtModalData({ ...otModalData, hours: '', reason: '' });
+                setOtModalData({ id: null, date: new Date().toISOString().split('T')[0], hours: '', multiplier: 1.5, reason: '', monthIdx: selectedMonthIdx });
               }}
             >
-              Add Entry
+              {otModalData.id ? 'Save Changes' : 'Add Entry'}
             </button>
           </div>
         </div>

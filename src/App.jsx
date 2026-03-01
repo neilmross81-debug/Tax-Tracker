@@ -1384,7 +1384,7 @@ function App() {
                 </select>
               </div>
               <div>
-                <label className="stat-label">Date</label>
+                <label className="stat-label">Date Worked</label>
                 <input type="date" className="input-field" value={otModalData.date} onChange={e => setOtModalData({ ...otModalData, date: e.target.value })} />
               </div>
               <div>

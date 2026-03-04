@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -763,51 +763,47 @@ function App() {
 
   return (
     <div className="app-container">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1>TaxTracker <span style={{ fontSize: '0.8rem' }}>v20.5</span></h1>
-          <p>UK Tax Year {taxYear} - Professional Grade</p>
+      <header style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '1rem', paddingTop: '0.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem' }}>
+          <Landmark size={32} color="var(--primary)" style={{ filter: 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.4))' }} />
+          <h1 style={{
+            margin: 0,
+            fontSize: '2rem',
+            background: 'linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '-0.5px',
+            fontWeight: 800
+          }}>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.6</span>
+          </h1>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <button
-            onClick={() => {
-              if (!sandboxMode) {
-                setSandboxSalary(baseSalary);
-                setSandboxPension(pensionPercent);
-              }
-              setSandboxMode(!sandboxMode);
-            }}
-            className={`btn-icon ${sandboxMode ? 'active' : ''}`}
-            style={{
-              background: sandboxMode ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-              padding: '0.5rem 1rem',
-              borderRadius: '2rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: 'white',
-              fontSize: '0.85rem'
-            }}
-          >
-            <Calculator size={16} />
-            <span>{sandboxMode ? 'Exit What-If' : 'What-If?'}</span>
-          </button>
-          <div style={{ width: '1px', height: '1.5rem', background: 'rgba(255,255,255,0.15)' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.3rem' }}>
-            <span style={{ fontSize: '0.75rem', opacity: 0.5, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentUser?.email}</span>
-            <button
-              onClick={() => signOut(auth)}
-              title="Sign Out"
-              style={{
-                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: '0.4rem', padding: '0.25rem 0.5rem', color: '#fca5a5',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.7rem'
-              }}
-            >
-              <LogOut size={12} /> Sign Out
-            </button>
-          </div>
-        </div>
+
+        <button
+          onClick={() => {
+            if (!sandboxMode) {
+              setSandboxSalary(baseSalary);
+              setSandboxPension(pensionPercent);
+            }
+            setSandboxMode(!sandboxMode);
+          }}
+          className={`btn-primary ${sandboxMode ? 'active' : ''}`}
+          style={{
+            width: '100%',
+            background: sandboxMode ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+            border: sandboxMode ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            padding: '1rem',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '1rem',
+            boxShadow: sandboxMode ? '0 0 15px rgba(99, 102, 241, 0.3)' : 'none'
+          }}
+        >
+          <Calculator size={20} />
+          <span>{sandboxMode ? 'Exit What-If Scenario Mode' : 'Enter What-If Sandbox'}</span>
+        </button>
       </header>
 
       {sandboxMode && (
@@ -1341,6 +1337,39 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Global Footer */}
+        <footer style={{
+          marginTop: '3rem',
+          paddingTop: '2rem',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '1.25rem',
+          paddingBottom: '3rem'
+        }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ShieldCheck size={14} color="var(--success)" /> UK Tax Year {taxYear} - Professional Grade
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem 1rem', borderRadius: '2rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentUser?.email}</span>
+            <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
+            <button
+              onClick={() => signOut(auth)}
+              title="Sign Out"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fca5a5',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem',
+                padding: 0
+              }}
+            >
+              <LogOut size={14} /> Sign Out
+            </button>
+          </div>
+        </footer>
       </main>
 
       <nav className="nav-bar">

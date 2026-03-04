@@ -492,6 +492,10 @@ function App() {
                 <div className="stat-value">£{analyticsData.projections.gross.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
               </div>
               <div className="stat-card">
+                <label className="stat-label">Taxable Income</label>
+                <div className="stat-value" style={{ color: 'var(--warning)' }}>£{analyticsData.projections.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div className="stat-card">
                 <label className="stat-label">Projected Net</label>
                 <div className="stat-value" style={{ color: 'var(--primary)' }}>£{analyticsData.projections.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
               </div>
@@ -603,6 +607,11 @@ function App() {
   const monthlyPension = currentMonthFull.pension;
   const monthlyGrossSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
   const monthlyNetSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
+
+  // v20.8 Breakdown Totals
+  const totalPreTax = monthlyGrossSacrifice + (pensionType === 'salary_sacrifice' ? monthlyPension : 0);
+  const totalStatutory = (monthlyResultsAnnualized.incomeTax / 12) + (monthlyResultsAnnualized.ni / 12) + (monthlyResultsAnnualized.studentLoan / 12) + (monthlyResultsAnnualized.hicbc / 12) + (pensionType !== 'salary_sacrifice' ? monthlyPension : 0);
+  const totalPostTax = monthlyNetSacrifice;
 
   const monthlyResultsAnnualized = calculateTax(
     monthlyGross * 12,
@@ -1088,10 +1097,28 @@ function App() {
               </div>
 
               <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.75rem', opacity: 0.6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem', opacity: 0.6 }}>
                   <span>Total Gross</span>
                   <span>£{monthlyGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
+                {totalPreTax > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem', opacity: 0.6 }}>
+                    <span>Pre-Tax Deductions</span>
+                    <span style={{ color: 'var(--error)' }}>-£{totalPreTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {totalStatutory > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem', opacity: 0.6 }}>
+                    <span>Statutory Deductions</span>
+                    <span style={{ color: 'var(--error)' }}>-£{totalStatutory.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                {totalPostTax > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.75rem', opacity: 0.6 }}>
+                    <span>Post-Tax Deductions</span>
+                    <span style={{ color: 'var(--error)' }}>-£{totalPostTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="stat-label" style={{ margin: 0 }}>Estimated Net Pay:</span>
                   <strong style={{ fontSize: '1.5rem', color: 'var(--success)' }}>£{totalMonthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>

@@ -50,10 +50,14 @@ export const parseTaxCode = (code) => {
     if (cleanCode === 'D1') return -9999999;
     if (cleanCode === 'NT') return 1000000;
 
-    const match = cleanCode.match(/(\d+)/);
+    const match = cleanCode.match(/(-?\d+)/);
     if (match) {
-        const value = parseInt(match[1]) * 10;
-        if (cleanCode.startsWith('K')) return -value;
+        let value = parseInt(match[1]) * 10;
+        if (cleanCode.startsWith('K')) {
+            // If the math matched a positive number but it's a K code, negate it
+            // If they typed K-100 it's already negative, so Math.abs ensures we negate the absolute value
+            return -Math.abs(value);
+        }
         return value;
     }
     return 12570;
@@ -193,11 +197,11 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
 
     for (let i = 0; i <= currentMonthIndex; i++) {
         const m = monthsActualData[i];
-        ytdGross += m.income.reduce((s, item) => s + Number(item.amount || 0), 0);
-        ytdPension += m.deductions.reduce((s, item) => s + (item.type === 'pension' ? Number(item.amount || 0) : 0), 0);
-        ytdSacrifice += m.deductions.reduce((s, item) => s + (item.type === 'salary_sacrifice' ? Number(item.amount || 0) : 0), 0);
-        ytdNetDeductions += m.deductions.reduce((s, item) => s + (item.type === 'net_sacrifice' ? Number(item.amount || 0) : 0), 0);
-        ytdTaxFree += m.deductions.reduce((s, item) => s + (item.type === 'tax_free' ? Number(item.amount || 0) : 0), 0);
+        ytdGross += m.gross;
+        ytdPension += m.pension;
+        ytdSacrifice += m.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
+        ytdNetDeductions += m.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
+        ytdTaxFree += m.taxFree;
     }
 
     const remaining = 11 - currentMonthIndex;

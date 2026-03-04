@@ -327,7 +327,7 @@ function App() {
     const grossBaseSacrificeMonthly = baseSacrifices.filter(d => d.type !== 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0) + (sandboxMode && sandboxSacrifice !== null ? sandboxSacrifice / 12 : 0);
     const netBaseSacrificeMonthly = baseSacrifices.filter(d => d.type === 'net_sacrifice').reduce((s, d) => s + getMonthlyValue(d.amount, d.frequency), 0);
 
-    const grossForPension = monthlyBaseSalary + baseEnhancementMonthly;
+    const grossForPension = monthlyBaseSalary;
     const pension = grossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
     return {
@@ -354,7 +354,7 @@ function App() {
       const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + holidaySupplementAmount;
 
       const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
-      const totalMonthlyGrossForPension = monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome;
+      const totalMonthlyGrossForPension = monthlyBaseSalary;
       const pension = totalMonthlyGrossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
       const varTaxFree = m.deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
@@ -775,7 +775,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.6</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.7</span>
           </h1>
         </div>
 
@@ -1231,8 +1231,12 @@ function App() {
               <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
                 <div><label className="stat-label">Tax Year</label>
                   <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
-                    <option value="2025/26">2025/26 (Upcoming)</option>
-                    <option value="2024/25">2024/25 (Current)</option>
+                    {[...Array(17)].map((_, i) => {
+                      const y1 = 2024 + i;
+                      const y2 = String(y1 + 1).slice(-2);
+                      const yrString = `${y1}/${y2}`;
+                      return <option key={yrString} value={yrString}>{yrString}{i === 0 ? ' (Current)' : i === 1 ? ' (Upcoming)' : ''}</option>;
+                    })}
                   </select>
                 </div>
                 <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>

@@ -598,7 +598,7 @@ function App() {
 
   // 4. Current Selected Month Summary Logic
   const currentMonthFull = monthsActualData[selectedMonthIdx];
-  const monthlyGross = currentMonthFull.incomeItems.reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.income.reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + currentMonthFull.ot + ((sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12);
+  const monthlyGross = currentMonthFull.gross;
   const monthlyPension = currentMonthFull.pension;
   const monthlyGrossSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
   const monthlyNetSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);

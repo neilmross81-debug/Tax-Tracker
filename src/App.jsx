@@ -590,7 +590,7 @@ function App() {
   };
 
   // 3. Projections
-  const projection = projectAnnual(months, futureBaseData, selectedMonthIdx, taxCode, {
+  const projection = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, {
     taxYear,
     studentLoanPlans,
     childBenefitCount,

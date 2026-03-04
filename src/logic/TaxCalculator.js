@@ -198,8 +198,16 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
     for (let i = 0; i <= currentMonthIndex; i++) {
         const m = monthsActualData[i];
         ytdGross += m.gross;
-        ytdPension += m.pension;
-        ytdSacrifice += m.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
+
+        if (!options.omitAllPension) {
+            ytdPension += m.pension;
+        }
+
+        let monthSac = m.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
+        if (options.omitAllSacrifice) monthSac = 0;
+        else if (options.omitSpecificSacrificeAmount) monthSac = Math.max(0, monthSac - options.omitSpecificSacrificeAmount);
+        ytdSacrifice += monthSac;
+
         ytdNetDeductions += m.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0) + m.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, item) => s + Number(item.amount || 0), 0);
         ytdTaxFree += m.taxFree;
     }
@@ -207,8 +215,15 @@ export const projectAnnual = (monthsActualData, futureBaseData, currentMonthInde
     const remaining = 11 - currentMonthIndex;
     if (remaining > 0) {
         ytdGross += (futureBaseData.gross * remaining);
-        ytdPension += (futureBaseData.pension * remaining);
-        ytdSacrifice += (futureBaseData.grossSacrifice * remaining);
+        if (!options.omitAllPension) {
+            ytdPension += (futureBaseData.pension * remaining);
+        }
+
+        let futSac = futureBaseData.grossSacrifice;
+        if (options.omitAllSacrifice) futSac = 0;
+        else if (options.omitSpecificSacrificeAmount) futSac = Math.max(0, futSac - options.omitSpecificSacrificeAmount);
+        ytdSacrifice += (futSac * remaining);
+
         ytdNetDeductions += (futureBaseData.netSacrifice * remaining);
         ytdTaxFree += (futureBaseData.taxFree * remaining);
     }

@@ -400,12 +400,12 @@ function App() {
       pensionIsSS: pensionType === 'salary_sacrifice'
     };
 
-    const currentProjected = projectAnnual(months, futureBaseData, selectedMonthIdx, taxCode, options);
+    const currentProjected = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, options);
 
     // Baseline (No Sacrifices - for comparison)
     // We assume sacrifice is 0 and pension is standard Relief at Source (not SS)
-    const baselineOptions = { ...options, pensionIsSS: false };
-    const baselineProjected = projectAnnual(months, { ...futureBaseData, grossSacrifice: 0 }, selectedMonthIdx, taxCode, baselineOptions);
+    const baselineOptions = { ...options, pensionIsSS: false, omitAllSacrifice: true };
+    const baselineProjected = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, baselineOptions);
 
     const taxSaved = Math.max(0, baselineProjected.incomeTax - currentProjected.incomeTax);
     const niSaved = Math.max(0, baselineProjected.ni - currentProjected.ni);
@@ -415,8 +415,8 @@ function App() {
 
     // 1. Pension
     if (pensionType === 'salary_sacrifice' && currentProjected.pensionContribution > 0) {
-      const withoutPensionOptions = { ...options, pensionIsSS: false };
-      const withoutPensionProj = projectAnnual(months, { ...futureBaseData, pension: 0 }, selectedMonthIdx, taxCode, withoutPensionOptions);
+      const withoutPensionOptions = { ...options, pensionIsSS: false, omitAllPension: true };
+      const withoutPensionProj = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, withoutPensionOptions);
       sacrificeItemsSavings.push({
         name: 'Pension (Mercer SS)',
         amount: currentProjected.pensionContribution,
@@ -428,8 +428,9 @@ function App() {
     // 2. Base Sacrifices
     baseSacrifices.filter(s => s.type !== 'net_sacrifice').forEach(s => {
       const annualItemAmount = getMonthlyValue(s.amount, s.frequency) * 12;
-      // We estimate marginal saving by subtracting this one item's annual value from the current gross sacrifice
-      const withoutThisItemProj = projectAnnual(months, { ...futureBaseData, grossSacrifice: Math.max(0, futureBaseData.grossSacrifice - (annualItemAmount / 12)) }, selectedMonthIdx, taxCode, options);
+      // We estimate marginal saving by omitting this specific amount
+      const withoutThisItemOptions = { ...options, omitSpecificSacrificeAmount: (annualItemAmount / 12) };
+      const withoutThisItemProj = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, withoutThisItemOptions);
 
       sacrificeItemsSavings.push({
         name: s.name || 'Sacrifice',

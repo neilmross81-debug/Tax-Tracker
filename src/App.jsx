@@ -608,11 +608,6 @@ function App() {
   const monthlyGrossSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'salary_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
   const monthlyNetSacrifice = currentMonthFull.deductionItems.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0) + currentMonthFull.rawMonthsActual.deductions.filter(d => d.type === 'net_sacrifice').reduce((s, i) => s + Number(i.amount || 0), 0);
 
-  // v20.8 Breakdown Totals
-  const totalPreTax = monthlyGrossSacrifice + (pensionType === 'salary_sacrifice' ? monthlyPension : 0);
-  const totalStatutory = (monthlyResultsAnnualized.incomeTax / 12) + (monthlyResultsAnnualized.ni / 12) + (monthlyResultsAnnualized.studentLoan / 12) + (monthlyResultsAnnualized.hicbc / 12) + (pensionType !== 'salary_sacrifice' ? monthlyPension : 0);
-  const totalPostTax = monthlyNetSacrifice;
-
   const monthlyResultsAnnualized = calculateTax(
     monthlyGross * 12,
     monthlyPension * 12,
@@ -621,6 +616,11 @@ function App() {
     monthlyNetSacrifice * 12,
     { taxYear, studentLoanPlans, childBenefitCount, pensionIsSS: pensionType === 'salary_sacrifice' }
   );
+
+  // v20.8 Breakdown Totals
+  const totalPreTax = monthlyGrossSacrifice + (pensionType === 'salary_sacrifice' ? monthlyPension : 0);
+  const totalStatutory = (monthlyResultsAnnualized.incomeTax / 12) + (monthlyResultsAnnualized.ni / 12) + (monthlyResultsAnnualized.studentLoan / 12) + (monthlyResultsAnnualized.hicbc / 12) + (pensionType !== 'salary_sacrifice' ? monthlyPension : 0);
+  const totalPostTax = monthlyNetSacrifice;
 
   const totalMonthlyNet = (monthlyResultsAnnualized.annualTakeHome / 12) + currentMonthFull.taxFree;
 

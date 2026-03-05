@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 import AuthModal from './AuthModal';
+import SelfEmployedTab from './SelfEmployedTab';
+import GuideTab from './GuideTab';
+import { calculateSEProfit, calculateMileageAllowance, calculateSelfAssessment } from './logic/SelfAssessmentCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
@@ -64,6 +67,10 @@ function App() {
   const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
 
+  // --- Self-Employment State ---
+  const [workMode, setWorkMode] = useState('paye'); // 'paye' | 'se' | 'both'
+  const [seData, setSEData] = useState({ months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), vatRegistered: false, useTradingAllowance: false });
+
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
@@ -86,7 +93,9 @@ function App() {
     studentLoanPlans: [], childBenefitCount: 0,
     baseEnhancements: [], baseSacrifices: [],
     months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })),
-    hasCompletedTour: false // New users get the tour
+    workMode: 'paye',
+    seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), vatRegistered: false, useTradingAllowance: false },
+    hasCompletedTour: false
   });
 
   const applyProfile = (prof) => {
@@ -101,6 +110,8 @@ function App() {
     setBaseEnhancements(prof.baseEnhancements || []);
     setBaseSacrifices(prof.baseSacrifices || []);
     setMonths(prof.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
+    setWorkMode(prof.workMode || 'paye');
+    setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), vatRegistered: false, useTradingAllowance: false });
     setHasCompletedTour(prof.hasCompletedTour !== undefined ? prof.hasCompletedTour : true);
   };
 
@@ -282,7 +293,8 @@ function App() {
       ...profiles,
       [taxYear]: {
         taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent,
-        taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months
+        taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months,
+        workMode, seData
       }
     };
     setProfiles(updatedProfiles);
@@ -291,7 +303,7 @@ function App() {
     setDoc(docRef, { profiles: updatedProfiles }, { merge: true });
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, isLoaded]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, workMode, seData, isLoaded]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -403,6 +415,34 @@ function App() {
 
     const currentProjected = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, options);
 
+    // --- SE Integration ---
+    let seProfitAmt = 0;
+    let seSABill = 0;
+    let totalMiles = 0;
+    let totalSEInvoicedIncome = 0;
+    let totalSEExpenses = 0;
+
+    if (workMode !== 'paye') {
+      seData.months.forEach(m => {
+        (m.invoices || []).forEach(inv => { if (inv.paid) totalSEInvoicedIncome += Number(inv.amount || 0); });
+        (m.expenses || []).forEach(exp => { totalSEExpenses += Number(exp.amount || 0); });
+        (m.mileage || []).forEach(ml => { totalMiles += Number(ml.miles || 0); });
+      });
+
+      const mileageCalc = calculateMileageAllowance(totalMiles, taxYear);
+      const profitCalc = calculateSEProfit(totalSEInvoicedIncome, totalSEExpenses, mileageCalc.totalAllowance, seData.useTradingAllowance, taxYear);
+      seProfitAmt = profitCalc.profit;
+
+      const sa = calculateSelfAssessment({
+        payeANI: currentProjected.taxableIncome,
+        payeIncomeTaxPaid: currentProjected.incomeTax,
+        seProfit: seProfitAmt,
+        taxCode,
+        taxYear
+      });
+      seSABill = sa.totalSABill;
+    }
+
     // Baseline (No Sacrifices - for comparison)
     // We assume sacrifice is 0 and pension is standard Relief at Source (not SS)
     const baselineOptions = { ...options, pensionIsSS: false, omitAllSacrifice: true };
@@ -460,6 +500,10 @@ function App() {
     return {
       timeline,
       projections: currentProjected,
+      seProfit: seProfitAmt,
+      seSABill: seSABill,
+      totalTaxNI: currentProjected.totalTaxNI + seSABill,
+      totalTakeHome: currentProjected.annualTakeHome + seProfitAmt - seSABill + currentProjected.projectedTaxFree,
       sacrificeItemsSavings,
       savings: {
         tax: taxSaved,
@@ -467,14 +511,14 @@ function App() {
         total: taxSaved + niSaved
       }
     };
-  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months]);
+  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months, workMode, seData]);
 
   // Analytics Tab Component
   const AnalyticsTab = () => {
     const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#8b5cf6'];
     const pieData = [
-      { name: 'Take Home', value: analyticsData.projections.annualTakeHome + analyticsData.projections.projectedTaxFree, color: '#6366f1' },
-      { name: 'Income Tax', value: analyticsData.projections.incomeTax, color: '#f43f5e' },
+      { name: 'Take Home', value: analyticsData.totalTakeHome, color: '#6366f1' },
+      { name: 'Income Tax', value: analyticsData.projections.incomeTax + analyticsData.seSABill, color: '#f43f5e' },
       { name: 'Nat. Insurance', value: analyticsData.projections.ni, color: '#fbbf24' },
       { name: 'Pension', value: analyticsData.projections.pensionContribution, color: '#10b981' }
     ];
@@ -487,22 +531,30 @@ function App() {
             <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <TrendingUp size={20} color="var(--primary)" /> Year-End Forecast ({taxYear})
             </h2>
-            <div className="dashboard-grid">
-              <div className="stat-card">
-                <label className="stat-label">Projected Gross</label>
-                <div className="stat-value">£{analyticsData.projections.gross.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+              <div>
+                <div className="stat-label">Total Gross Income</div>
+                <div className="stat-value">£{(analyticsData.projections.gross + (analyticsData.seProfit / (seData.useTradingAllowance ? 1 : 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                  PAYE: £{analyticsData.projections.gross.toLocaleString()} | SE: £{analyticsData.seProfit.toLocaleString()}
+                </div>
               </div>
-              <div className="stat-card">
-                <label className="stat-label">Taxable Income</label>
-                <div className="stat-value" style={{ color: 'var(--warning)' }}>£{analyticsData.projections.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              <div>
+                <div className="stat-label">Total Effective Tax</div>
+                <div className="stat-value" style={{ color: 'var(--error)' }}>£{analyticsData.totalTaxNI.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                  PAYE IT/NI: £{analyticsData.projections.totalTaxNI.toLocaleString()} | SA Bill: £{analyticsData.seSABill.toLocaleString()}
+                </div>
               </div>
-              <div className="stat-card">
-                <label className="stat-label">Projected Net</label>
-                <div className="stat-value" style={{ color: 'var(--primary)' }}>£{analyticsData.projections.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              <div>
+                <div className="stat-label">Total Annual Net</div>
+                <div className="stat-value" style={{ color: 'var(--success)' }}>£{analyticsData.totalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
-              <div className="stat-card">
-                <label className="stat-label">Total Tax & NI</label>
-                <div className="stat-value" style={{ color: 'var(--error)' }}>£{analyticsData.projections.totalTaxNI.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              <div>
+                <div className="stat-label">Overall Tax Rate</div>
+                <div className="stat-value" style={{ color: 'var(--warning)' }}>
+                  {((analyticsData.totalTaxNI / (analyticsData.projections.gross + analyticsData.seProfit)) * 100).toFixed(1)}%
+                </div>
               </div>
               <div className="stat-card">
                 <label className="stat-label">Pension Pot Growth</label>
@@ -1062,12 +1114,18 @@ function App() {
               <div style={{ marginBottom: '1.25rem' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Statutory Deductions</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                  <span style={{ opacity: 0.75 }}>Income Tax</span>
-                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.incomeTax / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ opacity: 0.75 }}>Taxable Income</span>
+                  <span style={{ fontWeight: 600 }}>£{analyticsData.projections.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                  <span style={{ opacity: 0.75 }}>National Insurance</span>
-                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                {workMode !== 'paye' && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                    <span style={{ opacity: 0.75 }}>Self-Employed Profit</span>
+                    <span style={{ fontWeight: 600, color: 'var(--success)' }}>+£{analyticsData.seProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <strong>Annual Take-Home</strong>
+                  <strong style={{ color: 'var(--primary)' }}>£{analyticsData.totalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                 </div>
                 {pensionType !== 'salary_sacrifice' && monthlyPension > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
@@ -1211,6 +1269,20 @@ function App() {
 
         {activeTab === 'analytics' && <AnalyticsTab />}
 
+        {activeTab === 'selfemployed' && (
+          <SelfEmployedTab
+            seData={seData}
+            onUpdateSEData={setSEData}
+            taxYear={taxYear}
+            payeANI={analyticsData.projections.taxableIncome}
+            payeIncomeTaxPaid={analyticsData.projections.incomeTax}
+            taxCode={taxCode}
+            currentUser={currentUser}
+          />
+        )}
+
+        {activeTab === 'guide' && <GuideTab taxYear={taxYear} workMode={workMode} />}
+
         {activeTab === 'overtime' && (
           <div>
             <div className="glass-card" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
@@ -1307,6 +1379,14 @@ function App() {
                       const yrString = `${y1}/${y2}`;
                       return <option key={yrString} value={yrString}>{yrString}</option>;
                     })}
+                  </select>
+                </div>
+                <div>
+                  <label className="stat-label">Work Mode</label>
+                  <select value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
+                    <option value="paye" style={{ background: '#1e293b' }}>PAYE Only</option>
+                    <option value="se" style={{ background: '#1e293b' }}>Self-Employed Only</option>
+                    <option value="both" style={{ background: '#1e293b' }}>PAYE + Self-Employed</option>
                   </select>
                 </div>
                 <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
@@ -1476,19 +1556,31 @@ function App() {
         </footer>
       </main>
 
-      <nav className="nav-bar">
+      <nav className="nav-bar" style={{ gridTemplateColumns: workMode !== 'paye' ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)' }}>
         <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <LayoutDashboard size={20} />
-          <span>Dashboard</span>
+          <span>Home</span>
         </div>
         <div className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} id="tour-analytics-trigger" onClick={() => setActiveTab('analytics')}>
           <BarChart3 size={20} />
-          <span>Analytics</span>
+          <span>Stats</span>
         </div>
         <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
           <span>OT</span>
         </div>
+        {workMode !== 'paye' && (
+          <div className={`nav-item ${activeTab === 'selfemployed' ? 'active' : ''}`} onClick={() => setActiveTab('selfemployed')}>
+            <Briefcase size={20} />
+            <span>SE</span>
+          </div>
+        )}
+        {workMode !== 'paye' && (
+          <div className={`nav-item ${activeTab === 'guide' ? 'active' : ''}`} onClick={() => setActiveTab('guide')}>
+            <BookOpen size={20} />
+            <span>Guide</span>
+          </div>
+        )}
         <div className={`nav-item ${activeTab === 'config' ? 'active' : ''}`} onClick={() => setActiveTab('config')}>
           <Settings size={20} />
           <span>Settings</span>

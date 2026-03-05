@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -68,6 +68,7 @@ function App() {
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
   // --- Tour State ---
+  const [sourceYearForCopy, setSourceYearForCopy] = useState('2024/25');
   const [tourStep, setTourStep] = useState(null);
   const [showOtModal, setShowOtModal] = useState(false);
   const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
@@ -671,6 +672,35 @@ function App() {
     else setBaseSacrifices(baseSacrifices.filter(i => i.id !== id));
   };
 
+  const handleCopyTaxYearData = async (sourceYear) => {
+    if (!currentUser) return;
+    if (!window.confirm(`Are you sure you want to copy all settings and monthly data FROM ${sourceYear} TO the current active year (${taxYear})? This will overwrite your current ${taxYear} data.`)) {
+      return;
+    }
+
+    try {
+      const sourceRef = doc(db, 'users', currentUser.uid, 'years', sourceYear);
+      const sourceSnap = await getDoc(sourceRef);
+
+      if (sourceSnap.exists()) {
+        const sourceData = sourceSnap.data();
+        // We want to keep the current taxYear but overwrite everything else
+        const targetRef = doc(db, 'users', currentUser.uid, 'years', taxYear);
+        await setDoc(targetRef, {
+          ...sourceData,
+          taxYear: taxYear // Ensure the taxYear field inside the doc matches the target path
+        });
+        alert(`Successfully copied data from ${sourceYear} to ${taxYear}. Page will now reload.`);
+        window.location.reload();
+      } else {
+        alert(`No data found for the tax year ${sourceYear}.`);
+      }
+    } catch (err) {
+      console.error("Error copying tax year data:", err);
+      alert("Failed to copy data. Check console for details.");
+    }
+  };
+
   const addMonthItem = (monthIdx, type) => {
     const n = [...months];
     const newItem = type === 'overtime'
@@ -785,7 +815,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.7</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.9</span>
           </h1>
         </div>
 
@@ -1263,7 +1293,7 @@ function App() {
                       const y1 = 2024 + i;
                       const y2 = String(y1 + 1).slice(-2);
                       const yrString = `${y1}/${y2}`;
-                      return <option key={yrString} value={yrString}>{yrString}{i === 0 ? ' (Current)' : i === 1 ? ' (Upcoming)' : ''}</option>;
+                      return <option key={yrString} value={yrString}>{yrString}</option>;
                     })}
                   </select>
                 </div>
@@ -1347,6 +1377,36 @@ function App() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(99, 102, 241, 0.05)', borderRadius: '0.8rem', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Copy size={18} /> Data Management
+                </h3>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <label className="stat-label">Copy All Settings From Year:</label>
+                    <select value={sourceYearForCopy} onChange={(e) => setSourceYearForCopy(e.target.value)} className="input-field">
+                      {[...Array(17)].map((_, i) => {
+                        const y1 = 2024 + i;
+                        const y2 = String(y1 + 1).slice(-2);
+                        const yrString = `${y1}/${y2}`;
+                        return <option key={yrString} value={yrString}>{yrString}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => handleCopyTaxYearData(sourceYearForCopy)}
+                    className="btn-secondary"
+                    style={{ flex: '0 0 auto', padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}
+                    disabled={sourceYearForCopy === taxYear}
+                  >
+                    Copy to {taxYear}
+                  </button>
+                </div>
+                <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', opacity: 0.5 }}>
+                  This will duplicate all salary settings, pensions, recurring items, and monthly logs from the source year into your currently active {taxYear} profile.
+                </p>
               </div>
 
               <div className="card" style={{ marginTop: '1.5rem', opacity: 0.5 }}>

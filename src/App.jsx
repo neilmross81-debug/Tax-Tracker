@@ -679,25 +679,37 @@ function App() {
     }
 
     try {
-      const sourceRef = doc(db, 'users', currentUser.uid, 'years', sourceYear);
-      const sourceSnap = await getDoc(sourceRef);
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const snap = await getDoc(userDocRef);
 
-      if (sourceSnap.exists()) {
-        const sourceData = sourceSnap.data();
-        // We want to keep the current taxYear but overwrite everything else
-        const targetRef = doc(db, 'users', currentUser.uid, 'years', taxYear);
-        await setDoc(targetRef, {
-          ...sourceData,
-          taxYear: taxYear // Ensure the taxYear field inside the doc matches the target path
-        });
-        alert(`Successfully copied data from ${sourceYear} to ${taxYear}. Page will now reload.`);
-        window.location.reload();
-      } else {
-        alert(`No data found for the tax year ${sourceYear}.`);
+      if (!snap.exists()) {
+        alert('Could not find your user data. Please try again.');
+        return;
       }
+
+      const allProfiles = snap.data().profiles || {};
+      const sourceProfileData = allProfiles[sourceYear];
+
+      if (!sourceProfileData) {
+        alert(`No data found for the tax year ${sourceYear}. Make sure you have entered some data for that year first.`);
+        return;
+      }
+
+      // Copy the source profile into the target year, keeping the taxYear field correct
+      const updatedProfiles = {
+        ...allProfiles,
+        [taxYear]: {
+          ...sourceProfileData,
+          taxYear: taxYear
+        }
+      };
+
+      await setDoc(userDocRef, { profiles: updatedProfiles }, { merge: true });
+      alert(`Successfully copied data from ${sourceYear} to ${taxYear}. Page will now reload.`);
+      window.location.reload();
     } catch (err) {
-      console.error("Error copying tax year data:", err);
-      alert("Failed to copy data. Check console for details.");
+      console.error('Error copying tax year data:', err);
+      alert('Failed to copy data. Check console for details.');
     }
   };
 

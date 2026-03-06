@@ -238,8 +238,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 throw lastErr;
             };
 
-            // Try standard flash names first, then fall back to experimental or pro
-            const { responseText } = await tryRequest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
+            // Even more robust fallback list for new keys
+            const { responseText } = await tryRequest([
+                'gemini-1.5-flash-latest',
+                'gemini-1.5-flash',
+                'gemini-1.5-flash-8b-latest',
+                'gemini-1.5-flash-8b',
+                'gemini-2.0-flash',
+                'gemini-1.5-pro-latest',
+                'gemini-1.5-pro'
+            ]);
 
             if (imageFile) {
                 const extracted = parsePayslipJson(responseText);
@@ -270,7 +278,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             let errMsg = `Error: ${rawMessage || 'Could not reach AI. Please try again.'}`;
 
             if (rawMessage.includes('limit: 0')) {
-                errMsg = "Google is reporting a 'Limit 0' for your key. This almost always means the key is brand new and still 'thawing'. Please wait 2-5 minutes and it should start working automatically.";
+                errMsg = "Google is reporting 'Limit 0'. This is normal for brand-new keys! Your project is currently 'thawing' on Google's servers. Please wait 5-10 minutes and try again — it will start working automatically.";
             } else if (rawMessage.includes('429')) {
                 errMsg = `Google API Quota Error: ${rawMessage}. (Usually means 15 requests/min limit hit).`;
             } else if (rawMessage.includes('API_KEY_INVALID')) {

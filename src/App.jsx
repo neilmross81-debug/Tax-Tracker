@@ -990,7 +990,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.5</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.6</span>
           </h1>
         </div>
 
@@ -1706,7 +1706,15 @@ function App() {
                             }
                             throw lastE;
                           };
-                          await tryTest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
+                          await tryTest([
+                            'gemini-1.5-flash-latest',
+                            'gemini-1.5-flash',
+                            'gemini-1.5-flash-8b-latest',
+                            'gemini-1.5-flash-8b',
+                            'gemini-2.0-flash',
+                            'gemini-1.5-pro-latest',
+                            'gemini-1.5-pro'
+                          ]);
                           alert("✅ Connection Successful! Your key is working.");
                         } catch (err) {
                           const msg = err.message || '';

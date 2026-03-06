@@ -675,7 +675,7 @@ function App() {
                         <span style={{ opacity: 0.6 }}>NI Saved:</span>
                         <span style={{ color: 'var(--success)' }}>+£{item.niSaved.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                       </div>
-                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--glass-border)', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
                         <span>Total Benefit:</span>
                         <span style={{ fontSize: '1.1rem' }}>£{(item.taxSaved + item.niSaved).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
                       </div>
@@ -695,10 +695,10 @@ function App() {
             <h3 style={{ margin: '0 0 1.5rem 0' }}>Income vs. Deductions (Monthly)</h3>
             <ResponsiveContainer width="100%" height={350}>
               <BarChart data={analyticsData.timeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} />
-                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickFormatter={(v) => `£${v / 1000}k`} />
-                <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.85rem' }} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--text-main)" fontSize={12} opacity={0.6} />
+                <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} tickFormatter={(v) => `£${v / 1000}k`} />
+                <Tooltip contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-main)' }} cursor={{ fill: 'rgba(150, 150, 150, 0.1)' }} />
                 <Legend />
                 <Bar dataKey="net" name="Net Pay" stackId="a" fill="var(--primary)" />
                 <Bar dataKey="tax" name="Income Tax" stackId="a" fill="#f43f5e" />
@@ -715,10 +715,10 @@ function App() {
             <h3 style={{ margin: '0 0 1.5rem 0' }}>Overtime History (£)</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={analyticsData.timeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} />
-                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} />
-                <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--text-main)" fontSize={12} opacity={0.6} />
+                <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} />
+                <Tooltip cursor={{ fill: 'rgba(150, 150, 150, 0.1)' }} contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-main)' }} />
                 <Bar dataKey="ot" name="Overtime" fill="var(--primary)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -975,13 +975,13 @@ function App() {
           <h1 style={{
             margin: 0,
             fontSize: '2rem',
-            background: 'linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%)',
+            background: 'var(--primary)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.0</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.0</span>
           </h1>
         </div>
 
@@ -1003,8 +1003,9 @@ function App() {
           className={`btn-primary ${sandboxMode ? 'active' : ''}`}
           style={{
             width: '100%',
-            background: sandboxMode ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
-            border: sandboxMode ? 'none' : '1px solid rgba(255,255,255,0.1)',
+            background: sandboxMode ? 'var(--primary)' : 'var(--glass-bg)',
+            color: sandboxMode ? 'white' : 'var(--text-main)',
+            border: sandboxMode ? 'none' : '1px solid var(--glass-border)',
             padding: '1rem',
             display: 'flex',
             justifyContent: 'center',
@@ -1118,7 +1119,7 @@ function App() {
       )}
 
       {trapAdvice.active && (
-        <div className="glass-card" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.15)' }}>
+        <div className="glass-card" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', background: 'var(--glass-bg)' }}>
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 300px' }}>
               <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginBottom: '1rem' }}>
@@ -1126,7 +1127,7 @@ function App() {
                 <strong>Sacrifice Advisor (ANI-Reduction)</strong>
               </div>
               <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>{trapAdvice.message}</p>
-              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '0.5rem' }}>
+              <div style={{ background: 'var(--input-bg)', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                   <span>Excess to Sacrifice:</span>
                   <strong style={{ color: 'var(--primary)' }}>£{trapAdvice.excessAmount.toLocaleString()}</strong>

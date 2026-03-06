@@ -8,6 +8,7 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tool
 import AuthModal from './AuthModal';
 import SelfEmployedTab from './SelfEmployedTab';
 import GuideTab from './GuideTab';
+import AiAssistant from './AiAssistant';
 import { calculateSEProfit, calculateMileageAllowance, calculateSelfAssessment } from './logic/SelfAssessmentCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -63,6 +64,10 @@ function App() {
   const [sandboxPension, setSandboxPension] = useState(null);
   const [sandboxOvertime, setSandboxOvertime] = useState(null);
   const [sandboxSacrifice, setSandboxSacrifice] = useState(null);
+  const [sandboxSEProfit, setSandboxSEProfit] = useState(null);
+  const [sandboxSipp, setSandboxSipp] = useState(null);
+  const [sandboxGiftAid, setSandboxGiftAid] = useState(null);
+  const [sandboxSEAllowance, setSandboxSEAllowance] = useState(null);
 
   const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
@@ -94,7 +99,7 @@ function App() {
     baseEnhancements: [], baseSacrifices: [],
     months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })),
     workMode: 'paye',
-    seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), vatRegistered: false, useTradingAllowance: false },
+    seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false },
     hasCompletedTour: false
   });
 
@@ -111,7 +116,7 @@ function App() {
     setBaseSacrifices(prof.baseSacrifices || []);
     setMonths(prof.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
     setWorkMode(prof.workMode || 'paye');
-    setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), vatRegistered: false, useTradingAllowance: false });
+    setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false });
     setHasCompletedTour(prof.hasCompletedTour !== undefined ? prof.hasCompletedTour : true);
   };
 
@@ -421,24 +426,40 @@ function App() {
     let totalMiles = 0;
     let totalSEInvoicedIncome = 0;
     let totalSEExpenses = 0;
+    let seSipp = sandboxMode ? (sandboxSipp || 0) : 0;
+    let seGiftAid = sandboxMode ? (sandboxGiftAid || 0) : 0;
 
-    if (workMode !== 'paye') {
-      seData.months.forEach(m => {
-        (m.invoices || []).forEach(inv => { if (inv.paid) totalSEInvoicedIncome += Number(inv.amount || 0); });
-        (m.expenses || []).forEach(exp => { totalSEExpenses += Number(exp.amount || 0); });
-        (m.mileage || []).forEach(ml => { totalMiles += Number(ml.miles || 0); });
-      });
+    if (workMode !== 'paye' || sandboxMode) {
+      if (sandboxMode && sandboxSEProfit !== null) {
+        seProfitAmt = sandboxSEProfit;
+      } else {
+        seData.months.forEach(m => {
+          (m.invoices || []).forEach(inv => { if (inv.paid) totalSEInvoicedIncome += Number(inv.amount || 0); });
+          (m.expenses || []).forEach(exp => { totalSEExpenses += Number(exp.amount || 0); });
+          (m.mileage || []).forEach(ml => { totalMiles += Number(ml.miles || 0); });
+        });
 
-      const mileageCalc = calculateMileageAllowance(totalMiles, taxYear);
-      const profitCalc = calculateSEProfit(totalSEInvoicedIncome, totalSEExpenses, mileageCalc.totalAllowance, seData.useTradingAllowance, taxYear);
-      seProfitAmt = profitCalc.profit;
+        const mileageCalc = calculateMileageAllowance(totalMiles, taxYear);
+        const profitCalc = calculateSEProfit({
+          grossIncome: totalSEInvoicedIncome,
+          totalExpenses: totalSEExpenses,
+          mileageAllowance: mileageCalc.totalAllowance,
+          useTradingAllowance: sandboxMode ? sandboxSEAllowance : seData.useTradingAllowance,
+          taxYear
+        });
+        seProfitAmt = profitCalc.profit;
+      }
 
       const sa = calculateSelfAssessment({
         payeANI: currentProjected.taxableIncome,
         payeIncomeTaxPaid: currentProjected.incomeTax,
         seProfit: seProfitAmt,
         taxCode,
-        taxYear
+        taxYear,
+        sipp: seSipp,
+        giftAid: seGiftAid,
+        studentLoanPlans,
+        payeStudentLoanPaid: currentProjected.studentLoan
       });
       seSABill = sa.totalSABill;
     }
@@ -497,21 +518,47 @@ function App() {
       };
     });
 
+    // Universal Advisory & Tax Pot
+    const recommendedCode = recommendTaxCode(currentProjected.taxableIncome);
+    const recommendedResults = calculateTax(currentProjected.gross, currentProjected.pensionContribution, currentProjected.salarySacrifice, recommendedCode, currentProjected.netDeductions, options);
+    const payeUnderpayment = Math.max(0, recommendedResults.incomeTax - currentProjected.incomeTax);
+
+    // Tax Pot Calculation (Monthly Set Aside)
+    // 1. SE Tax + NI
+    const seMonthlyTaxPot = seSABill / 12;
+    // 2. PAYE Underpayment (Spread over remaining months or full year)
+    const monthsRemaining = 12 - (selectedMonthIdx + 1);
+    const payeMonthlyShortfall = payeUnderpayment / (monthsRemaining > 0 ? monthsRemaining : 12);
+
+    const totalMonthlyTaxPot = Math.max(0, seMonthlyTaxPot + payeMonthlyShortfall);
+
+    // Marriage Allowance
+    const isMarriageAllowanceLikely = (currentProjected.gross + seProfitAmt) > 12570 && (currentProjected.gross + seProfitAmt) < 50270;
+
+    const isCodeMismatch = taxCode.toUpperCase().trim() !== recommendedCode.toUpperCase().trim();
+
     return {
       timeline,
       projections: currentProjected,
       seProfit: seProfitAmt,
       seSABill: seSABill,
+      seSipp,
+      seGiftAid,
       totalTaxNI: currentProjected.totalTaxNI + seSABill,
       totalTakeHome: currentProjected.annualTakeHome + seProfitAmt - seSABill + currentProjected.projectedTaxFree,
       sacrificeItemsSavings,
+      payeUnderpayment,
+      totalMonthlyTaxPot,
+      isMarriageAllowanceLikely,
+      isCodeMismatch,
+      recommendedCode: recommendedCode,
       savings: {
         tax: taxSaved,
         ni: niSaved,
         total: taxSaved + niSaved
       }
     };
-  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months, workMode, seData]);
+  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months, workMode, seData, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, sandboxSEProfit, sandboxSEAllowance, sandboxSipp, sandboxGiftAid]);
 
   // Analytics Tab Component
   const AnalyticsTab = () => {
@@ -641,6 +688,26 @@ function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+
+          {/* Marriage Allowance Advisor (Moved here) */}
+          {analyticsData.isMarriageAllowanceLikely && (
+            <div className="glass-card" style={{ gridColumn: '1 / -1', border: '1px solid var(--success)', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <h3 style={{ margin: '0 0 0.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)' }}>
+                    <ShieldCheck size={20} /> Marriage Allowance Advisor
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.8 }}>
+                    Your income levels suggest you could benefit from Marriage Allowance. You can transfer £1,260 of your Personal Allowance to your partner if they earn less than you.
+                  </p>
+                </div>
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '1rem 1.5rem', borderRadius: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.25rem' }}>Potential Saving</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success)' }}>£252<span style={{ fontSize: '0.9rem', opacity: 0.6 }}>/yr</span></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -879,7 +946,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v20.9</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'white', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.0</span>
           </h1>
         </div>
 
@@ -888,6 +955,13 @@ function App() {
             if (!sandboxMode) {
               setSandboxSalary(baseSalary);
               setSandboxPension(pensionPercent);
+              // Initialize SE sandbox values
+              if (workMode !== 'paye') {
+                setSandboxSEProfit(analyticsData.seProfit);
+                setSandboxSEAllowance(seData.useTradingAllowance);
+              }
+              setSandboxSipp(0);
+              setSandboxGiftAid(0);
             }
             setSandboxMode(!sandboxMode);
           }}
@@ -918,11 +992,11 @@ function App() {
             </h3>
             <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Experimental: Changes here won't save to your main data.</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div>
-              <label className="stat-label">Hypothetical Salary (£)</label>
+              <label className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Landmark size={14} /> Hypothetical Salary (£)</label>
               <input
-                type="range" min={baseSalary * 0.5} max={baseSalary * 2} step={500}
+                type="range" min={Math.max(0, baseSalary - 20000)} max={baseSalary + 50000} step={500}
                 value={sandboxSalary !== null ? sandboxSalary : baseSalary}
                 onChange={(e) => setSandboxSalary(Number(e.target.value))}
                 style={{ width: '100%', accentColor: 'var(--primary)' }}
@@ -939,6 +1013,30 @@ function App() {
               />
               <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>{sandboxPension !== null ? sandboxPension : pensionPercent}%</div>
             </div>
+            {workMode !== 'paye' && (
+              <>
+                <div>
+                  <label className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Briefcase size={14} /> Hypothetical SE Profit (£)</label>
+                  <input
+                    type="range" min={0} max={100000} step={1000}
+                    value={sandboxSEProfit !== null ? sandboxSEProfit : 0}
+                    onChange={(e) => setSandboxSEProfit(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--primary)' }}
+                  />
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxSEProfit !== null ? sandboxSEProfit : 0).toLocaleString()}</div>
+                </div>
+                <div>
+                  <label className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><ShieldCheck size={14} /> Hypothetical SIPP (£)</label>
+                  <input
+                    type="range" min={0} max={40000} step={500}
+                    value={sandboxSipp !== null ? sandboxSipp : 0}
+                    onChange={(e) => setSandboxSipp(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--primary)' }}
+                  />
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxSipp !== null ? sandboxSipp : 0).toLocaleString()}</div>
+                </div>
+              </>
+            )}
             <div>
               <label className="stat-label">Extra Overtime (Annual £)</label>
               <input
@@ -1032,6 +1130,50 @@ function App() {
       <main style={{ paddingBottom: '5rem' }}>
         {activeTab === 'dashboard' && (
           <div className="dashboard-grid">
+            {/* Universal Advisor Card - Conditional based on mismatch/underpayment OR SE income OR Personal Allowance Trap */}
+            {(analyticsData.isCodeMismatch || analyticsData.payeUnderpayment > 50 || analyticsData.seSABill > 0 || (analyticsData.projections.taxableIncome + analyticsData.seProfit > 100000)) && (
+              <div className="glass-card" id="tour-advisor" style={{ gridColumn: '1 / -1', border: '1px solid var(--primary)', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0) 100%)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: (analyticsData.isCodeMismatch || analyticsData.payeUnderpayment > 50 || analyticsData.seSABill > 0 || (analyticsData.projections.taxableIncome + analyticsData.seProfit > 100000)) ? 'repeat(auto-fit, minmax(280px, 1fr))' : '1fr', gap: '2rem' }}>
+                  {/* Tax Pot Advisor - Only if mismatch/underpayment OR SE income */}
+                  {(analyticsData.isCodeMismatch || analyticsData.payeUnderpayment > 50 || analyticsData.seSABill > 0) && (
+                    <div>
+                      <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem', color: 'var(--primary)' }}>
+                        <ShieldCheck size={20} /> Smart Tax Pot Advisor
+                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.25rem' }}>Monthly Set-Aside</div>
+                          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--warning)' }}>£{analyticsData.totalMonthlyTaxPot.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', opacity: 0.8, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '1rem' }}>
+                          <div style={{ marginBottom: '0.25rem' }}>Safe-to-Spend: <span style={{ color: 'var(--success)', fontWeight: 600 }}>£{((analyticsData.projections.annualTakeHome / 12) + (analyticsData.seProfit / 12) - analyticsData.totalMonthlyTaxPot).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span> /mo</div>
+                          <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Covers SE tax & PAYE shortfalls</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ borderLeft: (analyticsData.isCodeMismatch || analyticsData.payeUnderpayment > 50 || analyticsData.seSABill > 0) ? '1px solid rgba(255,255,255,0.1)' : 'none', paddingLeft: (analyticsData.isCodeMismatch || analyticsData.payeUnderpayment > 50 || analyticsData.seSABill > 0) ? '1rem' : '0' }}>
+                    <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem', color: 'var(--primary)' }}>
+                      <AlertTriangle size={20} /> Tax Insights
+                    </h3>
+                    {analyticsData.payeUnderpayment > 50 || analyticsData.isCodeMismatch ? (
+                      <div>
+                        <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.85rem', color: 'var(--error)' }}>
+                          ⚠️ <strong>Tax Code Issue</strong>: Your code <strong>{taxCode}</strong> {analyticsData.isCodeMismatch ? `mismatches recommended ${analyticsData.recommendedCode}` : `is under-taxing you by ~£${analyticsData.payeUnderpayment.toLocaleString()}`}.
+                        </p>
+                      </div>
+                    ) : null}
+                    {analyticsData.projections.taxableIncome + analyticsData.seProfit > 100000 && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', padding: '0.5rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '0.4rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                        ⚠️ <strong>Personal Allowance Trap</strong>: Consider SIPP/Sacrifice to restore your allowance.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="glass-card" id="tour-summary">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
                 <h2 style={{ margin: 0 }}>Monthly Summary</h2>
@@ -1666,6 +1808,23 @@ function App() {
       )}
 
       {tourStep !== null && <TourOverlay />}
+
+      {/* AI Tax Assistant - floating chat button */}
+      <AiAssistant
+        analyticsData={analyticsData}
+        workMode={workMode}
+        taxCode={taxCode}
+        taxYear={taxYear}
+        months={months}
+        selectedMonthIdx={selectedMonthIdx}
+        onUpdateMonth={(monthIdx, newMonthData) => {
+          setMonths(prev => {
+            const updated = [...prev];
+            updated[monthIdx] = newMonthData;
+            return updated;
+          });
+        }}
+      />
     </div>
   );
 }

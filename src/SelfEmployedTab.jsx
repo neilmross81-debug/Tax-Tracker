@@ -5,7 +5,8 @@ import {
     calculateClass4NI,
     calculateMileageAllowance,
     calculateSEProfit,
-    calculateSelfAssessment
+    calculateSelfAssessment,
+    calculateCapitalAllowances
 } from './logic/SelfAssessmentCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -18,6 +19,14 @@ const EXPENSE_CATEGORIES = [
     { value: 'professional', label: 'Professional Fees', examples: 'Accountant, legal, subscriptions' },
     { value: 'clothing', label: 'Clothing', examples: 'Uniforms & protective clothing only' },
     { value: 'other', label: 'Other', examples: 'Any other allowable expense' },
+];
+
+const ASSET_TYPES = [
+    { value: 'equipment', label: 'Equipment / Tools (AIA 100%)' },
+    { value: 'van', label: 'Van (AIA 100%)' },
+    { value: 'ev', label: 'Electric Car (FYA 100%)' },
+    { value: 'car_low', label: 'Car <= 50g/km (WDA 18%)' },
+    { value: 'car_high', label: 'Car > 50g/km (WDA 6%)' },
 ];
 
 const fmt = (n, dp = 2) => Number(n || 0).toLocaleString('en-GB', { minimumFractionDigits: dp, maximumFractionDigits: dp });
@@ -35,6 +44,7 @@ export default function SelfEmployedTab({
     const [selectedMonth, setSelectedMonth] = useState(0);
 
     const months = seData?.months || Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] }));
+    const assets = seData?.assets || [];
     const vatRegistered = seData?.vatRegistered || false;
     const useTradingAllowance = seData?.useTradingAllowance || false;
 
@@ -42,6 +52,10 @@ export default function SelfEmployedTab({
         const updated = [...months];
         updated[monthIdx] = { ...updated[monthIdx], [field]: newArr };
         onUpdateSEData({ ...seData, months: updated });
+    };
+
+    const updateAssets = (newAssets) => {
+        onUpdateSEData({ ...seData, assets: newAssets });
     };
 
     // --- Aggregated totals ---
@@ -67,12 +81,24 @@ export default function SelfEmployedTab({
             });
         });
 
+        const capitalAllowances = calculateCapitalAllowances(assets);
         const mileageCalc = calculateMileageAllowance(totalMiles, taxYear);
-        const profitCalc = calculateSEProfit(totalIncome, totalExpenses, mileageCalc.totalAllowance, useTradingAllowance, taxYear);
+        const profitCalc = calculateSEProfit({
+            grossIncome: totalIncome,
+            totalExpenses,
+            mileageAllowance: mileageCalc.totalAllowance,
+            useTradingAllowance,
+            capitalAllowances,
+            taxYear
+        });
         const sa = calculateSelfAssessment({ payeANI, payeIncomeTaxPaid, seProfit: profitCalc.profit, taxCode, taxYear });
 
-        return { totalIncome, unpaidIncome, totalExpenses, expensesByCategory, totalMiles, mileageCalc, profitCalc, sa };
-    }, [months, taxYear, useTradingAllowance, payeANI, payeIncomeTaxPaid, taxCode]);
+        // Vehicle Advisor Logic: Mileage vs Actuals
+        const vehicleActualCost = assets.filter(a => a.type.includes('car') || a.type === 'van' || a.type === 'ev').reduce((s, a) => s + calculateCapitalAllowances([a]), 0) + (expensesByCategory['travel'] || 0);
+        const betterMethod = mileageCalc.totalAllowance >= vehicleActualCost ? 'mileage' : 'actuals';
+
+        return { totalIncome, unpaidIncome, totalExpenses, expensesByCategory, totalMiles, mileageCalc, capitalAllowances, profitCalc, sa, betterMethod, vehicleActualCost };
+    }, [months, assets, taxYear, useTradingAllowance, payeANI, payeIncomeTaxPaid, taxCode]);
 
     const addItem = (monthIdx, field, template) => {
         const arr = [...(months[monthIdx][field] || [])];
@@ -88,6 +114,21 @@ export default function SelfEmployedTab({
     const removeItem = (monthIdx, field, id) => {
         const arr = (months[monthIdx][field] || []).filter(i => i.id !== id);
         updateMonth(monthIdx, field, arr);
+    };
+
+    const addAsset = () => {
+        const newAssets = [...assets, { id: Date.now().toString(), name: '', cost: '', type: 'equipment' }];
+        updateAssets(newAssets);
+    };
+
+    const updateAsset = (id, key, val) => {
+        const newAssets = assets.map(a => a.id === id ? { ...a, [key]: val } : a);
+        updateAssets(newAssets);
+    };
+
+    const removeAsset = (id) => {
+        const newAssets = assets.filter(a => a.id !== id);
+        updateAssets(newAssets);
     };
 
     const exportSAReport = () => {
@@ -172,8 +213,9 @@ export default function SelfEmployedTab({
     const subTabs = [
         { id: 'income', label: 'Income', icon: <TrendingUp size={16} /> },
         { id: 'expenses', label: 'Expenses', icon: <Receipt size={16} /> },
+        { id: 'assets', label: 'Assets', icon: <Briefcase size={16} /> },
         { id: 'mileage', label: 'Mileage', icon: <Car size={16} /> },
-        { id: 'summary', label: 'SA Summary', icon: <FileText size={16} /> },
+        { id: 'summary', label: 'Summary', icon: <FileText size={16} /> },
     ];
 
     return (
@@ -253,7 +295,7 @@ export default function SelfEmployedTab({
             </div>
 
             {/* Month selector (for income/expenses/mileage) */}
-            {subTab !== 'summary' && (
+            {subTab !== 'summary' && subTab !== 'assets' && (
                 <div style={{ marginBottom: '1rem' }}>
                     <select
                         className="input-field"
@@ -351,6 +393,38 @@ export default function SelfEmployedTab({
                 </div>
             )}
 
+            {/* --- ASSETS TAB --- */}
+            {subTab === 'assets' && (
+                <div className="glass-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h3 style={{ margin: 0 }}>Assets & Capital Allowances</h3>
+                        <button className="btn-add" onClick={addAsset}>
+                            <Plus size={16} />
+                        </button>
+                    </div>
+                    <div style={{ fontSize: '0.82rem', opacity: 0.6, marginBottom: '1.25rem' }}>
+                        Log equipment or vehicles to claim tax relief (Capital Allowances).
+                    </div>
+                    {assets.map(asset => (
+                        <div key={asset.id} style={{ marginBottom: '0.75rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                <input placeholder="Asset Name" value={asset.name} onChange={e => updateAsset(asset.id, 'name', e.target.value)} className="input-field" style={{ flex: '2 1 150px' }} />
+                                <input type="number" placeholder="Cost (£)" value={asset.cost} onChange={e => updateAsset(asset.id, 'cost', e.target.value)} className="input-field" style={{ flex: '1 1 100px' }} />
+                                <select value={asset.type} onChange={e => updateAsset(asset.id, 'type', e.target.value)} className="input-field" style={{ flex: '2 1 200px' }}>
+                                    {ASSET_TYPES.map(t => <option key={t.value} value={t.value} style={{ background: '#1e293b' }}>{t.label}</option>)}
+                                </select>
+                                <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeAsset(asset.id)}><Trash2 size={16} /></button>
+                            </div>
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between', opacity: 0.6 }}>
+                                <span>Relief Claimed this year:</span>
+                                <strong style={{ color: 'var(--success)' }}>£{fmt(calculateCapitalAllowances([asset]))}</strong>
+                            </div>
+                        </div>
+                    ))}
+                    {assets.length === 0 && <p style={{ textAlign: 'center', opacity: 0.4, padding: '1.5rem 0' }}>No assets logged yet. Use these for 100% tax relief on gear.</p>}
+                </div>
+            )}
+
             {/* --- MILEAGE TAB --- */}
             {subTab === 'mileage' && (
                 <div>
@@ -367,8 +441,7 @@ export default function SelfEmployedTab({
                         {(months[selectedMonth].mileage || []).map(ml => (
                             <div key={ml.id} className="income-line" style={{ marginBottom: '0.75rem' }}>
                                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <input placeholder="Journey description" value={ml.description} onChange={e => updateItem(selectedMonth, 'mileage', ml.id, 'description', e.target.value)} className="input-field" style={{ flex: '3 1 140px' }} />
-                                    <input type="date" value={ml.date} onChange={e => updateItem(selectedMonth, 'mileage', ml.id, 'date', e.target.value)} className="input-field" style={{ flex: '1 1 100px' }} />
+                                    <input placeholder="Journey" value={ml.description} onChange={e => updateItem(selectedMonth, 'mileage', ml.id, 'description', e.target.value)} className="input-field" style={{ flex: '3 1 140px' }} />
                                     <input type="number" placeholder="Miles" value={ml.miles} onChange={e => updateItem(selectedMonth, 'mileage', ml.id, 'miles', e.target.value)} className="input-field" style={{ flex: '1 1 60px' }} />
                                     <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeItem(selectedMonth, 'mileage', ml.id)}><Trash2 size={16} /></button>
                                 </div>
@@ -376,31 +449,26 @@ export default function SelfEmployedTab({
                         ))}
                     </div>
 
-                    {/* Annual mileage summary */}
-                    <div className="glass-card">
-                        <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Car size={18} color="var(--primary)" /> Annual Mileage Summary</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                            {[
-                                { label: 'Total Miles', value: `${totals.mileageCalc.totalMiles.toLocaleString()}` },
-                                { label: 'Remaining @ 45p', value: `${totals.mileageCalc.remainingAt45p.toLocaleString()} mi` },
-                                { label: 'At 45p/mile', value: `£${fmt(totals.mileageCalc.rate1Value)}` },
-                                { label: 'At 25p/mile', value: `£${fmt(totals.mileageCalc.rate2Value)}` },
-                            ].map(s => (
-                                <div key={s.label} style={{ background: 'rgba(0,0,0,0.15)', padding: '0.75rem', borderRadius: '0.5rem' }}>
-                                    <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>{s.label}</div>
-                                    <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{s.value}</div>
-                                </div>
-                            ))}
-                        </div>
-                        <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '1.1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--glass-border)' }}>
-                            <span>Total Mileage Allowance</span>
-                            <span style={{ color: 'var(--success)' }}>£{fmt(totals.mileageCalc.totalAllowance)}</span>
-                        </div>
-                        {totals.mileageCalc.rateDropped && (
-                            <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '0.5rem 0.75rem', borderRadius: '0.4rem' }}>
-                                ⚠️ You've exceeded 10,000 miles — rate has dropped to 25p/mile for remaining journeys.
+                    {/* Vehicle Efficiency Advisor */}
+                    <div className="glass-card" style={{ border: '1px solid var(--primary)', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, transparent 100%)' }}>
+                        <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ShieldCheck size={18} color="var(--primary)" /> Vehicle Efficiency Advisor</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                            <div style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.5rem' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Mileage Method (45p)</div>
+                                <div style={{ fontWeight: 'bold' }}>£{fmt(totals.mileageCalc.totalAllowance)}</div>
                             </div>
-                        )}
+                            <div style={{ padding: '0.75rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.5rem' }}>
+                                <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Actual Methods (Costs + WDA)</div>
+                                <div style={{ fontWeight: 'bold' }}>£{fmt(totals.vehicleActualCost)}</div>
+                            </div>
+                        </div>
+                        <div style={{ padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(99, 102, 241, 0.1)', fontSize: '0.85rem' }}>
+                            {totals.betterMethod === 'mileage' ? (
+                                <p style={{ margin: 0 }}>🌟 <strong>Recommendation:</strong> Use <strong>Mileage (Simplified Expenses)</strong>. It saves you ~£{fmt(totals.mileageCalc.totalAllowance - totals.vehicleActualCost)} in additional deductions.</p>
+                            ) : (
+                                <p style={{ margin: 0 }}>🚗 <strong>Recommendation:</strong> Use <strong>Actual Costs + Capital Allowances</strong>. Better by £{fmt(totals.vehicleActualCost - totals.mileageCalc.totalAllowance)}.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -408,12 +476,11 @@ export default function SelfEmployedTab({
             {/* --- SA SUMMARY TAB --- */}
             {subTab === 'summary' && (
                 <div>
-                    {/* Profit Calculation */}
                     <div className="glass-card" style={{ marginBottom: '1.5rem' }}>
                         <h3 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><TrendingUp size={18} color="var(--success)" /> Profit Calculation</h3>
                         {[
                             { label: 'Gross Income (paid invoices)', value: totals.profitCalc.grossIncome, color: 'var(--success)', prefix: '+' },
-                            { label: useTradingAllowance ? 'Trading Allowance (£1,000 flat)' : `Expenses + Mileage (£${fmt(totals.totalExpenses)} + £${fmt(totals.mileageCalc.totalAllowance)})`, value: totals.profitCalc.deduction, color: 'var(--error)', prefix: '−' },
+                            { label: useTradingAllowance ? 'Trading Allowance (£1,000 flat)' : 'Total Deductions (Inc. Capital)', value: totals.profitCalc.deduction, color: 'var(--error)', prefix: '−' },
                         ].map(row => (
                             <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.5rem', opacity: 0.8 }}>
                                 <span>{row.label}</span>

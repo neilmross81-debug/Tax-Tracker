@@ -1,6 +1,6 @@
 /**
- * UK Self Assessment Tax Calculator - v21.0
- * Class 2 NI, Class 4 NI, Payments on Account, Mileage, VAT
+ * UK Self Assessment Tax Calculator - v21.1
+ * Class 2 NI, Class 4 NI, Payments on Account, Mileage, VAT, Capital Allowances, Student Loans
  * Based on 2025/26 HMRC rules.
  */
 
@@ -21,6 +21,13 @@ const SE_CONSTANTS = {
         tradingAllowance: 1000,
         vatThreshold: 90000,
         paymentsOnAccountThreshold: 1000,    // SA bill > this to trigger PoA
+        slPlan1Threshold: 24910,
+        slPlan2Threshold: 27295,
+        slPlan4Threshold: 31395,
+        slPlan5Threshold: 25000,
+        slPglThreshold: 21000,
+        slRate: 0.09,
+        slPglRate: 0.06
     },
     '2024/25': {
         class2WeeklyRate: 3.45,
@@ -36,12 +43,18 @@ const SE_CONSTANTS = {
         tradingAllowance: 1000,
         vatThreshold: 90000,
         paymentsOnAccountThreshold: 1000,
+        slPlan1Threshold: 24910,
+        slPlan2Threshold: 27295,
+        slPlan4Threshold: 31395,
+        slPlan5Threshold: 25000,
+        slPglThreshold: 21000,
+        slRate: 0.09,
+        slPglRate: 0.06
     }
 };
 
 /**
  * Calculate Class 2 NI for self-employed
- * Returns annual amount payable
  */
 export const calculateClass2NI = (annualProfit, taxYear = '2025/26') => {
     const cfg = SE_CONSTANTS[taxYear] || SE_CONSTANTS['2025/26'];
@@ -70,8 +83,30 @@ export const calculateClass4NI = (annualProfit, taxYear = '2025/26') => {
 };
 
 /**
- * Calculate mileage allowance for the year.
- * Returns total allowance value and per-mile breakdown.
+ * Calculate Capital Allowances
+ */
+export const calculateCapitalAllowances = (assets) => {
+    let totalAIA = 0;
+    let mainPoolWDA = 0;
+    let specialPoolWDA = 0;
+
+    assets.forEach(asset => {
+        const cost = Number(asset.cost || 0);
+        // AIA limit is £1m, so we just assume AIA for simplicity unless cars
+        if (asset.type === 'equipment' || asset.type === 'van' || asset.type === 'ev') {
+            totalAIA += cost;
+        } else if (asset.type === 'car_low') { // Car <= 50g/km (main pool 18%)
+            mainPoolWDA += cost * 0.18;
+        } else if (asset.type === 'car_high') { // Car > 50g/km (special pool 6%)
+            specialPoolWDA += cost * 0.06;
+        }
+    });
+
+    return round(totalAIA + mainPoolWDA + specialPoolWDA);
+};
+
+/**
+ * Calculate mileage allowance
  */
 export const calculateMileageAllowance = (totalMiles, taxYear = '2025/26') => {
     const cfg = SE_CONSTANTS[taxYear] || SE_CONSTANTS['2025/26'];
@@ -91,30 +126,30 @@ export const calculateMileageAllowance = (totalMiles, taxYear = '2025/26') => {
 };
 
 /**
- * Calculate taxable SE profit given income and expenses.
- * Trading allowance and itemised expenses are mutually exclusive.
+ * Calculate taxable SE profit
  */
-export const calculateSEProfit = (grossIncome, totalExpenses, mileageAllowance, useTradingAllowance, taxYear = '2025/26') => {
+export const calculateSEProfit = (params) => {
+    const { grossIncome, totalExpenses, mileageAllowance, useTradingAllowance, capitalAllowances = 0, taxYear = '2025/26' } = params;
     const cfg = SE_CONSTANTS[taxYear] || SE_CONSTANTS['2025/26'];
+
     if (useTradingAllowance) {
         const deduction = Math.min(grossIncome, cfg.tradingAllowance);
         const profit = Math.max(0, grossIncome - deduction);
         return { grossIncome, deduction, profit, method: 'trading_allowance' };
     }
-    const totalDeductions = totalExpenses + mileageAllowance;
+
+    const totalDeductions = totalExpenses + mileageAllowance + capitalAllowances;
     const profit = Math.max(0, grossIncome - totalDeductions);
     return { grossIncome, deduction: totalDeductions, profit, method: 'actual_expenses' };
 };
 
 /**
- * Calculate the income tax attributable to SE profit when stacked on top of PAYE income.
- * payeANI = PAYE Adjusted Net Income (after PAYE sacifices/pension)
- * seProfit = self-employment taxable profit
+ * Calculate SE Income Tax with SIPP/Gift Aid band extension
  */
-export const calculateSEIncomeTax = (payeANI, seProfit, taxCode, taxYear = '2025/26') => {
+export const calculateSEIncomeTax = (params) => {
+    const { payeANI, seProfit, taxCode, sipp = 0, giftAid = 0, taxYear = '2025/26' } = params;
     if (seProfit <= 0) return 0;
 
-    // Import band config from the same constants used in TaxCalculator
     const BANDS = {
         '2025/26': { paMax: 12570, basicRateLimit: 37700, paThreshold: 100000 },
         '2024/25': { paMax: 12570, basicRateLimit: 37700, paThreshold: 100000 },
@@ -122,108 +157,119 @@ export const calculateSEIncomeTax = (payeANI, seProfit, taxCode, taxYear = '2025
     const cfg = BANDS[taxYear] || BANDS['2025/26'];
     const higherRateLimit = 125140;
 
-    // Combined ANI
-    const combinedANI = payeANI + seProfit;
+    // SIPP and Gift Aid (Grossed up: devide by 0.8)
+    const grossedUpSipp = sipp / 0.8;
+    const grossedUpGiftAid = giftAid / 0.8;
+    const totalExtension = grossedUpSipp + grossedUpGiftAid;
 
-    // Personal allowance (may be tapered)
+    // Tapered PA uses ANI (before extension)
+    const combinedANI = payeANI + seProfit - totalExtension;
+
     let pa = cfg.paMax;
     if (combinedANI > cfg.paThreshold) {
         pa = Math.max(0, pa - (combinedANI - cfg.paThreshold) / 2);
     }
 
-    // Tax on total combined income
     const calcTax = (income) => {
         let taxable = Math.max(0, income - pa);
         let tax = 0;
-        const basic = Math.min(taxable, cfg.basicRateLimit);
+        // Basic rate band is extended by SIPP/Gift Aid
+        const extendedBasicRateLimit = cfg.basicRateLimit + totalExtension;
+
+        const basic = Math.min(taxable, extendedBasicRateLimit);
         tax += basic * 0.20;
         taxable -= basic;
-        const higher = Math.min(taxable, higherRateLimit - cfg.paMax - cfg.basicRateLimit);
+
+        const higher = Math.min(taxable, higherRateLimit + totalExtension - cfg.paMax - extendedBasicRateLimit);
         tax += higher * 0.40;
         taxable -= higher;
+
         if (taxable > 0) tax += taxable * 0.45;
         return tax;
     };
 
-    const taxOnCombined = calcTax(combinedANI);
+    const taxOnCombined = calcTax(payeANI + seProfit);
     const taxOnPAYEOnly = calcTax(payeANI);
 
     return round(Math.max(0, taxOnCombined - taxOnPAYEOnly));
 };
 
 /**
+ * Calculate Student Loan repayments for SA
+ */
+export const calculateStudentLoanSA = (totalIncomeForSL, studentLoanPlans, taxYear = '2025/26') => {
+    const cfg = SE_CONSTANTS[taxYear] || SE_CONSTANTS['2025/26'];
+    let totalRepayment = 0;
+
+    const plans = studentLoanPlans || [];
+
+    // Most common plans (Highest threshold takes priority if overlap, but HMRC calculates per plan)
+    // Simple version: find the lowest threshold for plans 1-5 and calculate at 9%
+    const mainPlanThresholds = plans.filter(p => p !== 'pgl').map(p => {
+        if (p === 'plan1') return cfg.slPlan1Threshold;
+        if (p === 'plan2') return cfg.slPlan2Threshold;
+        if (p === 'plan4') return cfg.slPlan4Threshold;
+        if (p === 'plan5') return cfg.slPlan5Threshold;
+        return Infinity;
+    });
+
+    if (mainPlanThresholds.length > 0) {
+        const minThreshold = Math.min(...mainPlanThresholds);
+        if (totalIncomeForSL > minThreshold) {
+            totalRepayment += (totalIncomeForSL - minThreshold) * cfg.slRate;
+        }
+    }
+
+    if (plans.includes('pgl') && totalIncomeForSL > cfg.slPglThreshold) {
+        totalRepayment += (totalIncomeForSL - cfg.slPglThreshold) * cfg.slPglRate;
+    }
+
+    return round(totalRepayment);
+};
+
+/**
  * Full Self Assessment bill calculation.
- * Returns everything needed to build the SA summary and PoA planner.
  */
 export const calculateSelfAssessment = (params) => {
-    const {
-        payeANI = 0,
-        payeIncomeTaxPaid = 0,   // tax already deducted at source (used for PoA check)
-        seProfit = 0,
-        taxCode = '1257L',
-        taxYear = '2025/26',
-    } = params;
-
+    const { payeANI = 0, payeIncomeTaxPaid = 0, seProfit = 0, taxCode = '1257L', sipp = 0, giftAid = 0, studentLoanPlans = [], taxYear = '2025/26', payeStudentLoanPaid = 0 } = params;
     const cfg = SE_CONSTANTS[taxYear] || SE_CONSTANTS['2025/26'];
 
     const class2 = calculateClass2NI(seProfit, taxYear);
     const class4 = calculateClass4NI(seProfit, taxYear);
-    const seIncomeTax = calculateSEIncomeTax(payeANI, seProfit, taxCode, taxYear);
+    const seIncomeTax = calculateSEIncomeTax({ payeANI, seProfit, taxCode, sipp, giftAid, taxYear });
 
-    const totalSABill = round(seIncomeTax + class2.amount + class4);
+    // Student Loan through SA
+    const totalIncomeForSL = payeANI + seProfit;
+    const totalSLDue = calculateStudentLoanSA(totalIncomeForSL, studentLoanPlans, taxYear);
+    const slDueViaSA = Math.max(0, totalSLDue - payeStudentLoanPaid);
 
-    // Payments on Account logic
-    // Required if bill > £1,000 and < 80% was collected at source
+    const totalSABill = round(seIncomeTax + class2.amount + class4 + slDueViaSA);
+
     const totalTaxLiability = totalSABill + payeIncomeTaxPaid;
     const fractionAtSource = totalTaxLiability > 0 ? payeIncomeTaxPaid / totalTaxLiability : 1;
     const poaRequired = totalSABill > cfg.paymentsOnAccountThreshold && fractionAtSource < 0.8;
-
     const poaAmount = poaRequired ? round(totalSABill / 2) : 0;
 
-    // Filing year (Jan after tax year end)
     const taxYearStart = parseInt(taxYear.split('/')[0]);
-    const filingDeadline = `31 January ${taxYearStart + 2}`;
-    const poa1Date = `31 January ${taxYearStart + 2}`;  // same as filing deadline in year 1
-    const poa2Date = `31 July ${taxYearStart + 2}`;
-
     return {
-        seIncomeTax,
-        class2NI: class2.amount,
-        class2Note: class2.note,
-        class4NI: class4,
-        totalSABill,
-        poaRequired,
-        poaAmount,
-        poa1Date,
-        poa2Date,
-        filingDeadline,
-        // In year 1: Jan payment = balancing + 1st PoA
+        seIncomeTax, class2NI: class2.amount, class2Note: class2.note, class4NI: class4, slDueViaSA, totalSABill, poaRequired, poaAmount,
+        poa1Date: `31 January ${taxYearStart + 2}`,
+        poa2Date: `31 July ${taxYearStart + 2}`,
+        filingDeadline: `31 January ${taxYearStart + 2}`,
         januaryPayment: round(totalSABill + poaAmount),
         julyPayment: poaAmount,
     };
 };
 
 /**
- * VAT summary for a year's invoices and expenses
+ * VAT summary
  */
 export const calculateVAT = (invoices, expenses, vatRate = 0.20) => {
     const outputVAT = round(invoices * vatRate);
     const inputVAT = round(expenses * vatRate);
-    return {
-        outputVAT,
-        inputVAT,
-        netVATOwed: round(outputVAT - inputVAT),
-    };
+    return { outputVAT, inputVAT, netVATOwed: round(outputVAT - inputVAT) };
 };
 
-export const SE_TAX_YEAR_CONSTANTS = SE_CONSTANTS;
-
 export default {
-    calculateClass2NI,
-    calculateClass4NI,
-    calculateMileageAllowance,
-    calculateSEProfit,
-    calculateSEIncomeTax,
-    calculateSelfAssessment,
-    calculateVAT,
+    calculateClass2NI, calculateClass4NI, calculateCapitalAllowances, calculateMileageAllowance, calculateSEProfit, calculateSEIncomeTax, calculateStudentLoanSA, calculateSelfAssessment, calculateVAT,
 };

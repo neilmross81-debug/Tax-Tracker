@@ -71,6 +71,7 @@ function App() {
 
   const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
 
   // --- Self-Employment State ---
   const [workMode, setWorkMode] = useState('paye'); // 'paye' | 'se' | 'both'
@@ -988,7 +989,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.9</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v23.0</span>
           </h1>
         </div>
 

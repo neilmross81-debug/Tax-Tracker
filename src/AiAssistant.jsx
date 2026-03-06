@@ -245,7 +245,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         } catch (err) {
             console.error('Gemini error:', err);
             const errMsg = err.message?.includes('429')
-                ? 'Rate limit reached. Please wait a moment and try again.'
+                ? 'Google API Free Tier Limit: You can only ask 15 questions per minute. Please pause for 60 seconds and try again!'
                 : `Error: ${err.message || 'Could not reach AI. Please try again.'}`;
             setError(errMsg);
         } finally {

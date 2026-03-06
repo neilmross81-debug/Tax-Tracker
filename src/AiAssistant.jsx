@@ -201,18 +201,48 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             const trimmedKey = geminiApiKey.trim();
             const genAI = new GoogleGenerativeAI(trimmedKey);
 
-            if (imageFile) {
-                // Payslip scan mode — use multimodal
-                const base64 = await fileToBase64(imageFile);
-                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                const result = await model.generateContent([
-                    { inlineData: { mimeType: imageFile.type, data: base64 } },
-                    buildPayslipExtractionPrompt(),
-                ]);
-                const responseText = result.response.text();
-                const extracted = parsePayslipJson(responseText);
+            const tryRequest = async (modelNames) => {
+                let lastErr = null;
+                for (const modelName of modelNames) {
+                    try {
+                        const model = genAI.getGenerativeModel({
+                            model: modelName,
+                            systemInstruction: imageFile ? undefined : (buildSystemPrompt(analyticsData, workMode, taxCode, taxYear) || "You are a helpful UK tax advisor assistant."),
+                        });
 
-                // Strip the JSON block from the display text
+                        if (imageFile) {
+                            const base64 = await fileToBase64(imageFile);
+                            const result = await model.generateContent([
+                                { inlineData: { mimeType: imageFile.type, data: base64 } },
+                                buildPayslipExtractionPrompt(),
+                            ]);
+                            return { responseText: result.response.text(), success: true };
+                        } else {
+                            const history = newMessages.slice(-10, -1)
+                                .filter(m => !m.image)
+                                .map(m => ({
+                                    role: m.role === 'user' ? 'user' : 'model',
+                                    parts: [{ text: m.content }]
+                                }));
+                            const chat = model.startChat({ history });
+                            const result = await chat.sendMessage(userText);
+                            return { responseText: result.response.text(), success: true };
+                        }
+                    } catch (e) {
+                        console.warn(`Model ${modelName} failed:`, e);
+                        lastErr = e;
+                        // If it's a 404, we definitely want to try the next model
+                        // If it's a 429, we might want to try a different model tier if available
+                    }
+                }
+                throw lastErr;
+            };
+
+            // Try standard flash names first, then fall back to experimental or pro
+            const { responseText } = await tryRequest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']);
+
+            if (imageFile) {
+                const extracted = parsePayslipJson(responseText);
                 const displayText = responseText.replace(/```json[\s\S]*?```/, '').trim();
 
                 if (extracted) {
@@ -221,7 +251,6 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     setPendingPayslip({ data: extracted, awaitingMonth, monthIdx: detectedMonth });
                     setMessages(prev => [...prev, { role: 'assistant', content: displayText }]);
                     if (!awaitingMonth) {
-                        // Month detected — confirm with user
                         setTimeout(() => {
                             setMessages(prev => [...prev, {
                                 role: 'assistant',
@@ -233,20 +262,6 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
                 }
             } else {
-                // Normal chat mode - limit to last 10 messages to save Token Quota
-                const model = genAI.getGenerativeModel({
-                    model: 'gemini-1.5-flash',
-                    systemInstruction: buildSystemPrompt(analyticsData, workMode, taxCode, taxYear) || "You are a helpful UK tax advisor assistant.",
-                });
-                const history = newMessages.slice(-10, -1)
-                    .filter(m => !m.image)
-                    .map(m => ({
-                        role: m.role === 'user' ? 'user' : 'model',
-                        parts: [{ text: m.content }]
-                    }));
-                const chat = model.startChat({ history });
-                const result = await chat.sendMessage(userText);
-                const responseText = result.response.text();
                 setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
             }
         } catch (err) {

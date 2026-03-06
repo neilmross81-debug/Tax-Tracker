@@ -439,7 +439,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder={pendingPayslip?.awaitingMonth ? "Which month is this payslip for?" : pendingPayslip?.monthIdx !== null ? `Type 'yes' to update ${MONTHS[pendingPayslip.monthIdx]}…` : "Ask about your taxes…"}
+                            placeholder={pendingPayslip?.awaitingMonth ? "Which month is this payslip for?" : (pendingPayslip && pendingPayslip.monthIdx !== null) ? `Type 'yes' to update ${MONTHS[pendingPayslip.monthIdx]}…` : "Ask about your taxes…"}
                             rows={1}
                             style={{
                                 flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)',

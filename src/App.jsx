@@ -81,6 +81,7 @@ function App() {
 
   // --- Tour State ---
   const [sourceYearForCopy, setSourceYearForCopy] = useState('2024/25');
+  const [targetYearForCopy, setTargetYearForCopy] = useState('2025/26');
   const [tourStep, setTourStep] = useState(null);
   const [showOtModal, setShowOtModal] = useState(false);
   const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
@@ -829,9 +830,10 @@ function App() {
     else setBaseSacrifices(baseSacrifices.filter(i => i.id !== id));
   };
 
-  const handleCopyTaxYearData = async (sourceYear) => {
+  const handleCopyTaxYearData = async (sourceYear, targetYear) => {
     if (!currentUser) return;
-    if (!window.confirm(`Are you sure you want to copy all settings and monthly data FROM ${sourceYear} TO the current active year (${taxYear})? This will overwrite your current ${taxYear} data.`)) {
+    const confirmMessage = `Are you sure you want to copy all settings and monthly data FROM ${sourceYear} TO ${targetYear}? This will overwrite existing data for ${targetYear}.`;
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
@@ -855,14 +857,14 @@ function App() {
       // Copy the source profile into the target year, keeping the taxYear field correct
       const updatedProfiles = {
         ...allProfiles,
-        [taxYear]: {
+        [targetYear]: {
           ...sourceProfileData,
-          taxYear: taxYear
+          taxYear: targetYear // Ensure the target profile knows what year it belongs to
         }
       };
 
       await setDoc(userDocRef, { profiles: updatedProfiles }, { merge: true });
-      alert(`Successfully copied data from ${sourceYear} to ${taxYear}. Page will now reload.`);
+      alert(`Successfully copied data from ${sourceYear} to ${targetYear}. Page will now reload.`);
       window.location.reload();
     } catch (err) {
       console.error('Error copying tax year data:', err);
@@ -1714,9 +1716,9 @@ function App() {
                 <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Copy size={18} /> Data Management
                 </h3>
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'flex-end' }}>
                   <div style={{ flex: '1 1 200px' }}>
-                    <label className="stat-label">Copy All Settings From Year:</label>
+                    <label className="stat-label">Copy Settings From:</label>
                     <select value={sourceYearForCopy} onChange={(e) => setSourceYearForCopy(e.target.value)} className="input-field">
                       {[...Array(17)].map((_, i) => {
                         const y1 = 2024 + i;
@@ -1726,17 +1728,28 @@ function App() {
                       })}
                     </select>
                   </div>
+                  <div style={{ flex: '1 1 200px' }}>
+                    <label className="stat-label">Copy Settings To:</label>
+                    <select value={targetYearForCopy} onChange={(e) => setTargetYearForCopy(e.target.value)} className="input-field">
+                      {[...Array(17)].map((_, i) => {
+                        const y1 = 2024 + i;
+                        const y2 = String(y1 + 1).slice(-2);
+                        const yrString = `${y1}/${y2}`;
+                        return <option key={yrString} value={yrString}>{yrString}</option>;
+                      })}
+                    </select>
+                  </div>
                   <button
-                    onClick={() => handleCopyTaxYearData(sourceYearForCopy)}
+                    onClick={() => handleCopyTaxYearData(sourceYearForCopy, targetYearForCopy)}
                     className="btn-secondary"
-                    style={{ flex: '0 0 auto', padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}
-                    disabled={sourceYearForCopy === taxYear}
+                    style={{ gridColumn: '1 / -1', padding: '0.75rem 1.5rem', fontSize: '0.9rem' }}
+                    disabled={sourceYearForCopy === targetYearForCopy}
                   >
-                    Copy to {taxYear}
+                    Duplicate Settings To {targetYearForCopy}
                   </button>
                 </div>
                 <p style={{ margin: '0.75rem 0 0 0', fontSize: '0.75rem', opacity: 0.5 }}>
-                  This will duplicate all salary settings, pensions, recurring items, and monthly logs from the source year into your currently active {taxYear} profile.
+                  This will duplicate all salary settings, pensions, recurring items, and monthly logs from the source year into the selected target year profile.
                 </p>
               </div>
 
@@ -1834,7 +1847,7 @@ function App() {
               <button className="btn-icon" onClick={() => setShowBaseModifierModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
             </div>
 
-            <div className="dashboard-grid" style={{ gap: '1rem', marginTop: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
               <div>
                 <label className="stat-label">Description / Name</label>
                 <input className="input-field" value={baseModifierModalData.name} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, name: e.target.value })} placeholder="e.g. Car Allowance" />
@@ -1926,7 +1939,7 @@ function App() {
               <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 12, multiplier: 2.0 })}>12h @ 2.0x</button>
             </div>
 
-            <div className="dashboard-grid" style={{ gap: '1rem', marginTop: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
               <div>
                 <label className="stat-label">Month Paid</label>
                 <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>

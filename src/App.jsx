@@ -70,6 +70,7 @@ function App() {
   const [sandboxGiftAid, setSandboxGiftAid] = useState(null);
   const [sandboxSEAllowance, setSandboxSEAllowance] = useState(null);
 
+  const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [sandboxBaselineNet, setSandboxBaselineNet] = useState(null);

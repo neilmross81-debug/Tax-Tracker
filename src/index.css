@@ -234,7 +234,8 @@ select.input-field {
 
 .nav-bar {
   position: fixed;
-  bottom: 1.5rem;
+  bottom: 0.75rem;
+  /* Lowered slightly for more room */
   left: 50%;
   transform: translateX(-50%);
   background: var(--nav-bg);
@@ -242,13 +243,17 @@ select.input-field {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: 2rem;
-  padding: 0.5rem;
-  display: flex;
-  gap: 0.5rem;
+  padding: 0.35rem;
+  /* Reduced padding */
+  display: flex !important;
+  /* Force flex to follow nav-item flex:1 logic */
+  gap: 0.25rem;
+  /* Reduced gap */
   z-index: 1000;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  width: calc(100% - 3rem);
-  max-width: 500px;
+  width: calc(100% - 1rem);
+  /* Wider on mobile to use more space */
+  max-width: 600px;
 }
 
 .nav-item {
@@ -256,15 +261,34 @@ select.input-field {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.75rem;
+  justify-content: center;
+  gap: 0.15rem;
+  /* Tighter gap */
+  padding: 0.6rem 0.2rem;
+  /* Reduced horizontal padding significantly */
   border-radius: 1.5rem;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  /* Slightly smaller font */
   font-weight: 600;
   text-transform: uppercase;
+  min-width: 0;
+  /* Allow shrinking */
+}
+
+/* On mobile, hide text for inactive items if we have many */
+@media (max-width: 480px) {
+  .nav-item:not(.active) span {
+    display: none;
+  }
+
+  .nav-item.active {
+    flex: 1.5;
+    /* Give active item more room for label */
+    padding: 0.6rem 0.5rem;
+  }
 }
 
 .nav-item.active {

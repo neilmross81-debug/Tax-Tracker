@@ -997,7 +997,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.0</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.1</span>
           </h1>
         </div>
 
@@ -1929,7 +1929,7 @@ function App() {
         </footer>
       </main>
 
-      <nav className="nav-bar" style={{ gridTemplateColumns: workMode !== 'paye' ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)' }}>
+      <nav className="nav-bar">
         <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
           <LayoutDashboard size={20} />
           <span>Home</span>

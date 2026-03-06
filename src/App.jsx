@@ -109,6 +109,7 @@ function App() {
     pensionPercent: 5, pensionType: 'standard', holidaySupplementPercent: 8.3,
     studentLoanPlans: [], childBenefitCount: 0,
     baseEnhancements: [], baseSacrifices: [],
+    geminiApiKey: '',
     months: Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })),
     workMode: 'paye',
     seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false },
@@ -126,6 +127,7 @@ function App() {
     setChildBenefitCount(prof.childBenefitCount || 0);
     setBaseEnhancements(prof.baseEnhancements || []);
     setBaseSacrifices(prof.baseSacrifices || []);
+    setGeminiApiKey(prof.geminiApiKey || '');
     setMonths(prof.months || Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
     setWorkMode(prof.workMode || 'paye');
     setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false });
@@ -310,8 +312,8 @@ function App() {
       ...profiles,
       [taxYear]: {
         taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent,
-        taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months,
-        workMode, seData
+        taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months,
+        workMode, seData, hasCompletedTour
       }
     };
     setProfiles(updatedProfiles);
@@ -320,7 +322,7 @@ function App() {
     setDoc(docRef, { profiles: updatedProfiles }, { merge: true });
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, months, workMode, seData, isLoaded]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -986,7 +988,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.7</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.8</span>
           </h1>
         </div>
 
@@ -1655,6 +1657,32 @@ function App() {
               </div>
 
               <div className="settings-box">
+                <h3><Bot size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> AI Assistant Settings</h3>
+                <p style={{ fontSize: '0.85rem', opacity: 0.7, marginBottom: '1rem' }}>
+                  To use the AI Tax Assistant and Payslip Scanner, you need to provide your own Google Gemini API Key.
+                </p>
+                <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.5rem' }}>How to get a free key:</div>
+                  <ol style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                    <li>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a></li>
+                    <li>Sign in and click <strong>"Create API Key"</strong></li>
+                    <li>Copy the key and paste it below</li>
+                  </ol>
+                </div>
+                <div>
+                  <label className="stat-label">Gemini API Key</label>
+                  <input
+                    type="password"
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    className="input-field"
+                    placeholder="Paste your API key here (AIza...)"
+                  />
+                  <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.5rem' }}>Your key is stored securely in your private profile and is never shared.</p>
+                </div>
+              </div>
+
+              <div className="settings-box">
                 <h3><Calculator size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Recurring Salary Modifiers</h3>
                 <div className="dashboard-grid" style={{ marginTop: 0 }}>
                   <div>
@@ -2019,6 +2047,8 @@ function App() {
         workMode={workMode}
         taxCode={taxCode}
         taxYear={taxYear}
+        geminiApiKey={geminiApiKey}
+        onGoToSettings={() => setActiveTab('config')}
         months={months}
         selectedMonthIdx={selectedMonthIdx}
         onUpdateMonth={(monthIdx, newMonthData) => {

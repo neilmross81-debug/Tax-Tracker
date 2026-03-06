@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { X, Send, Bot, User, Sparkles, Paperclip, ImageIcon } from 'lucide-react';
 
-const GEMINI_API_KEY = 'AIzaSyDuNpywJYx3O2l7BsVo6vKAoj2PRbCao1k';
+// GEMINI_API_KEY is now managed via props in the App settings.
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
 const SUGGESTED_QUESTIONS = [
@@ -27,35 +27,35 @@ You have full access to the user's real financial data for the ${taxYear} tax ye
 --- USER'S FINANCIAL SNAPSHOT ---
 Work Mode: ${workModeLabel}
 Tax Code: ${taxCode} ${isCodeMismatch ? `(MISMATCH: recommended code is ${recommendedCode})` : '(correct)'}
-Projected Annual Gross (PAYE): £${projections?.gross?.toLocaleString() ?? 0}
-Income Tax Paid (PAYE): £${projections?.incomeTax?.toLocaleString() ?? 0}
-National Insurance (PAYE): £${projections?.ni?.toLocaleString() ?? 0}
+Projected Annual Gross(PAYE): £${projections?.gross?.toLocaleString() ?? 0}
+Income Tax Paid(PAYE): £${projections?.incomeTax?.toLocaleString() ?? 0}
+National Insurance(PAYE): £${projections?.ni?.toLocaleString() ?? 0}
 Pension Contributions: £${projections?.pensionContribution?.toLocaleString() ?? 0}
 Salary Sacrifice Total: £${projections?.salarySacrifice?.toLocaleString() ?? 0}
 ${seProfit > 0 ? `Self-Employed Profit: £${seProfit.toLocaleString()}` : ''}
 ${seSABill > 0 ? `Self Assessment Tax Bill: £${seSABill.toLocaleString()}` : ''}
 Total Tax & NI: £${totalTaxNI?.toLocaleString() ?? 0}
-Projected Annual Take-Home: £${totalTakeHome?.toLocaleString() ?? 0}
-Monthly Take-Home: £${projections?.monthlyTakeHome?.toLocaleString() ?? 0}
+Projected Annual Take - Home: £${totalTakeHome?.toLocaleString() ?? 0}
+Monthly Take - Home: £${projections?.monthlyTakeHome?.toLocaleString() ?? 0}
 ${payeUnderpayment > 50 ? `PAYE Underpayment: £${payeUnderpayment.toLocaleString()}` : ''}
 ${totalMonthlyTaxPot > 0 ? `Recommended Monthly Tax Set-Aside: £${totalMonthlyTaxPot.toLocaleString()}` : ''}
-Sacrifice/Pension Savings: £${savings?.total?.toLocaleString() ?? 0}
+Sacrifice / Pension Savings: £${savings?.total?.toLocaleString() ?? 0}
 ${isMarriageAllowanceLikely ? 'Marriage Allowance: Potentially eligible (£252/yr saving)' : ''}
 ---
 
-Rules:
+    Rules:
 - Always refer to the user's actual numbers when giving advice.
-- Keep responses concise and friendly — use bullet points where helpful.
-- Focus on HMRC-compliant, legal tax efficiency strategies.
+    - Keep responses concise and friendly — use bullet points where helpful.
+- Focus on HMRC - compliant, legal tax efficiency strategies.
 - Never give advice that was not a recognised legal tax reduction strategy in the UK.
 - If you don't know something specific, say so and suggest consulting an accountant.
-- Use £ for currency and UK tax terminology (e.g. "Personal Allowance", "Self Assessment", "National Insurance").
+    - Use £ for currency and UK tax terminology(e.g. "Personal Allowance", "Self Assessment", "National Insurance").
 - The current tax year is ${taxYear}.`;
 };
 
 const buildPayslipExtractionPrompt = () => `You are analysing a UK payslip image for a Tax Tracker app.
 
-Extract ALL pay and deduction line items from the payslip. Return your response in this EXACT JSON format (inside a \`\`\`json block):
+Extract ALL pay and deduction line items from the payslip.Return your response in this EXACT JSON format(inside a \`\`\`json block):
 
 \`\`\`json
 {
@@ -106,7 +106,7 @@ const detectPositiveConfirmation = (text) => {
     return /^(yes|yeah|yep|ok|okay|sure|go ahead|do it|update|confirm|correct|absolutely|please|y)/.test(t);
 };
 
-export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth }) {
+export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings }) {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -191,8 +191,14 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         setMessages(newMessages);
         setIsLoading(true);
 
+        if (!geminiApiKey) {
+            setError('Please provide your Gemini API key in the Settings tab to use the AI Assistant.');
+            setIsLoading(false);
+            return;
+        }
+
         try {
-            const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
 
             if (imageFile) {
                 // Payslip scan mode — use multimodal
@@ -246,7 +252,9 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             console.error('Gemini error:', err);
             const errMsg = err.message?.includes('429')
                 ? 'Google API Free Tier Limit: You can only ask 15 questions per minute. Please pause for 60 seconds and try again!'
-                : `Error: ${err.message || 'Could not reach AI. Please try again.'}`;
+                : err.message?.includes('API_KEY_INVALID')
+                    ? 'Your API Key appears to be invalid. Please check it in the Settings tab.'
+                    : `Error: ${err.message || 'Could not reach AI. Please try again.'}`;
             setError(errMsg);
         } finally {
             setIsLoading(false);
@@ -339,9 +347,35 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                         </div>
                     )}
 
-                    {/* Messages */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        {messages.length === 0 && (
+                    {/* Messages Area */}
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {!geminiApiKey && messages.length === 0 && (
+                            <div style={{
+                                background: 'rgba(99, 102, 241, 0.1)',
+                                border: '1px dashed var(--primary)',
+                                padding: '1.5rem',
+                                borderRadius: '0.75rem',
+                                textAlign: 'center'
+                            }}>
+                                <Bot size={32} style={{ color: 'var(--primary)', marginBottom: '0.75rem' }} />
+                                <h4 style={{ margin: '0 0 0.5rem 0' }}>Setup Required</h4>
+                                <p style={{ fontSize: '0.85rem', opacity: 0.8, margin: '0 0 1rem 0' }}>
+                                    To use the AI Tax Assistant, please enter your personal Gemini API key in the Settings.
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        onGoToSettings();
+                                    }}
+                                    className="btn-primary"
+                                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                                >
+                                    Go to Settings
+                                </button>
+                            </div>
+                        )}
+
+                        {messages.length === 0 && geminiApiKey && (
                             <div style={{ textAlign: 'center', marginTop: '1rem' }}>
                                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🧑‍💼</div>
                                 <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-main)' }}>Your personal tax advisor</div>

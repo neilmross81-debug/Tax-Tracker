@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon } from 'lucide-react';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -86,6 +86,14 @@ function App() {
   const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
   // null or index
   const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
+
+  // --- Theme State ---
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('light-mode', theme === 'light');
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   // --- Persistence Logic (v17.0 - Firebase Cloud Sync) ---
   const [currentUser, setCurrentUser] = useState(undefined); // undefined = loading, null = logged out
@@ -502,14 +510,41 @@ function App() {
       });
     });
 
-    // Monthly Timeline
-    const timeline = monthsActualData.map(m => {
-      const monthResult = calculateTax(m.gross * 12, m.pension * 12, 0, taxCode, 0, options);
+    // Monthly Timeline (Cumulative UK Tax Logic)
+    let ytdGross = 0;
+    let ytdPension = 0;
+    let ytdTaxPaid = 0;
+
+    const timeline = monthsActualData.map((m, i) => {
+      const currentTaxCode = m.rawMonthsActual.taxCodeOverride || taxCode;
+
+      // Calculate non-cumulative items (NI, SL, HICBC) on purely this month's pay
+      const monthResult = calculateTax(m.gross * 12, m.pension * 12, 0, currentTaxCode, 0, options);
+
+      // Calculate cumulative Income Tax
+      ytdGross += m.gross;
+      ytdPension += m.pension;
+
+      const annualizedYtdGross = (ytdGross / (i + 1)) * 12;
+      const annualizedYtdPension = (ytdPension / (i + 1)) * 12;
+
+      const ytdResults = calculateTax(annualizedYtdGross, annualizedYtdPension, 0, currentTaxCode, 0, options);
+
+      // Target YTD tax: total tax due on annualized YTD, divided by 12, multiplied by months elapsed
+      const targetYtdTax = (ytdResults.incomeTax / 12) * (i + 1);
+
+      // Tax to pay THIS month is the difference between target YTD tax and what we've already paid
+      const taxThisMonth = targetYtdTax - ytdTaxPaid;
+      ytdTaxPaid += taxThisMonth;
+
+      const nonCumulativeTax = monthResult.incomeTax / 12;
+      const accurateNet = (monthResult.annualTakeHome / 12) + nonCumulativeTax - taxThisMonth + m.taxFree;
+
       return {
         name: m.month.substring(0, 3),
         gross: m.gross,
-        net: (monthResult.annualTakeHome / 12) + m.taxFree,
-        tax: monthResult.incomeTax / 12,
+        net: accurateNet,
+        tax: taxThisMonth,
         ni: monthResult.ni / 12,
         sl: monthResult.studentLoan / 12,
         hicbc: monthResult.hicbc / 12,
@@ -1338,6 +1373,38 @@ function App() {
                 ))}
               </div>
 
+              {/* MID-YEAR TAX CODE OVERRIDE */}
+              <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--glass-bg)', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!months[selectedMonthIdx].taxCodeOverride}
+                    onChange={(e) => {
+                      const newMonths = [...months];
+                      if (e.target.checked) newMonths[selectedMonthIdx].taxCodeOverride = taxCode;
+                      else delete newMonths[selectedMonthIdx].taxCodeOverride;
+                      setMonths(newMonths);
+                    }}
+                  />
+                  Override Tax Code for {MONTHS[selectedMonthIdx]} onwards (Cumulative change)
+                </label>
+                {months[selectedMonthIdx].taxCodeOverride !== undefined && (
+                  <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.85rem', opacity: 0.8, color: 'var(--text-main)' }}>New Code active this month:</span>
+                    <input
+                      className="input-field"
+                      style={{ width: '100px', padding: '0.4rem', border: '1px solid var(--primary)' }}
+                      value={months[selectedMonthIdx].taxCodeOverride}
+                      onChange={(e) => {
+                        const newMonths = [...months];
+                        newMonths[selectedMonthIdx].taxCodeOverride = e.target.value.toUpperCase();
+                        setMonths(newMonths);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem', opacity: 0.6 }}>
                   <span>Total Gross</span>
@@ -1510,106 +1577,124 @@ function App() {
 
         {activeTab === 'config' && (
           <div>
-            <div className="glass-card">
-              <h2 style={{ margin: '0 0 1.5rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
-              <div className="dashboard-grid" style={{ marginBottom: '2rem' }}>
-                <div><label className="stat-label">Tax Year</label>
-                  <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
-                    {[...Array(17)].map((_, i) => {
-                      const y1 = 2024 + i;
-                      const y2 = String(y1 + 1).slice(-2);
-                      const yrString = `${y1}/${y2}`;
-                      return <option key={yrString} value={yrString}>{yrString}</option>;
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label className="stat-label">Work Mode</label>
-                  <select value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
-                    <option value="paye" style={{ background: '#1e293b' }}>PAYE Only</option>
-                    <option value="se" style={{ background: '#1e293b' }}>Self-Employed Only</option>
-                    <option value="both" style={{ background: '#1e293b' }}>PAYE + Self-Employed</option>
-                  </select>
-                </div>
-                <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
-                <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
-                <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
-                <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
-                <div>
-                  <label className="stat-label">Pension Type (Mercer SS?)</label>
-                  <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
-                    <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
-                    <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Mercer)</option>
-                  </select>
-                </div>
-                <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
-                <div><label className="stat-label">Children (Child Benefit)</label><input type="number" value={childBenefitCount} onChange={(e) => handleNumericInput(e.target.value, setChildBenefitCount)} className="input-field" /></div>
+            <div className="glass-card" style={{ padding: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Settings size={20} /> Annual Configuration</h2>
+                <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} className="btn-secondary" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />} {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+                </button>
               </div>
 
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="stat-label">Student Loan Plans</label>
-                <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                  {['plan1', 'plan2', 'plan4', 'plan5', 'pgl'].map(plan => (
-                    <label key={plan} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.4rem', border: studentLoanPlans.includes(plan) ? '1px solid var(--primary)' : '1px solid transparent' }}>
-                      <input
-                        type="checkbox"
-                        checked={studentLoanPlans.includes(plan)}
-                        onChange={(e) => {
-                          if (e.target.checked) setStudentLoanPlans([...studentLoanPlans, plan]);
-                          else setStudentLoanPlans(studentLoanPlans.filter(p => p !== plan));
-                        }}
-                        style={{ display: 'none' }}
-                      />
-                      <span style={{ color: studentLoanPlans.includes(plan) ? 'var(--primary)' : 'inherit' }}>{plan.toUpperCase()}</span>
-                    </label>
-                  ))}
+              <div className="settings-box">
+                <h3><Info size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Basic Details</h3>
+                <div className="dashboard-grid" style={{ marginTop: 0 }}>
+                  <div><label className="stat-label">Tax Year</label>
+                    <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
+                      {[...Array(17)].map((_, i) => {
+                        const y1 = 2024 + i;
+                        const y2 = String(y1 + 1).slice(-2);
+                        const yrString = `${y1}/${y2}`;
+                        return <option key={yrString} value={yrString}>{yrString}</option>;
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="stat-label">Work Mode</label>
+                    <select value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
+                      <option value="paye" style={{ background: '#1e293b' }}>PAYE Only</option>
+                      <option value="se" style={{ background: '#1e293b' }}>Self-Employed Only</option>
+                      <option value="both" style={{ background: '#1e293b' }}>PAYE + Self-Employed</option>
+                    </select>
+                  </div>
+                  <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
+                  <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
+                  <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 </div>
               </div>
 
-              <div className="dashboard-grid">
-                <div>
-                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
-                    Recurring Enhancements
-                    <button className="btn-add" onClick={() => addBaseItem('enhancement')} title="Add Enhancement">
-                      <Plus size={16} />
-                    </button>
+              <div className="settings-box">
+                <h3><Landmark size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Pension & Allowances</h3>
+                <div className="dashboard-grid" style={{ marginTop: 0 }}>
+                  <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
+                  <div>
+                    <label className="stat-label">Pension Type (Mercer SS?)</label>
+                    <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
+                      <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
+                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Mercer)</option>
+                    </select>
                   </div>
-                  {baseEnhancements.map(e => (
-                    <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                      <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
-                        <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
-                          <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                        </select>
-                        <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                  ))}
+                  <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
+                  <div><label className="stat-label">Children (Child Benefit)</label><input type="number" value={childBenefitCount} onChange={(e) => handleNumericInput(e.target.value, setChildBenefitCount)} className="input-field" /></div>
                 </div>
-                <div>
-                  <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
-                    Recurring Sacrifices
-                    <button className="btn-add" onClick={() => addBaseItem('sacrifice')} title="Add Sacrifice">
-                      <Plus size={16} />
-                    </button>
+
+                <div style={{ marginTop: '1.5rem' }}>
+                  <label className="stat-label">Student Loan Plans</label>
+                  <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                    {['plan1', 'plan2', 'plan4', 'plan5', 'pgl'].map(plan => (
+                      <label key={plan} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.4rem', border: studentLoanPlans.includes(plan) ? '1px solid var(--primary)' : '1px solid transparent' }}>
+                        <input
+                          type="checkbox"
+                          checked={studentLoanPlans.includes(plan)}
+                          onChange={(e) => {
+                            if (e.target.checked) setStudentLoanPlans([...studentLoanPlans, plan]);
+                            else setStudentLoanPlans(studentLoanPlans.filter(p => p !== plan));
+                          }}
+                          style={{ display: 'none' }}
+                        />
+                        <span style={{ color: studentLoanPlans.includes(plan) ? 'var(--primary)' : 'inherit' }}>{plan.toUpperCase()}</span>
+                      </label>
+                    ))}
                   </div>
-                  {baseSacrifices.map(d => (
-                    <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                      <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
-                        <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
-                          <option value="salary_sacrifice">Gross</option>
-                          <option value="net_sacrifice">Net</option>
-                        </select>
-                        <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
-                          <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                        </select>
-                        <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
-                      </div>
+                </div>
+              </div>
+
+              <div className="settings-box">
+                <h3><Calculator size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Recurring Salary Modifiers</h3>
+                <div className="dashboard-grid" style={{ marginTop: 0 }}>
+                  <div>
+                    <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+                      Recurring Enhancements
+                      <button className="btn-add" onClick={() => addBaseItem('enhancement')} title="Add Enhancement">
+                        <Plus size={16} />
+                      </button>
                     </div>
-                  ))}
+                    {baseEnhancements.map(e => (
+                      <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
+                        <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
+                          <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
+                            <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                          </select>
+                          <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+                      Recurring Sacrifices
+                      <button className="btn-add" onClick={() => addBaseItem('sacrifice')} title="Add Sacrifice">
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                    {baseSacrifices.map(d => (
+                      <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
+                        <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
+                          <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
+                            <option value="salary_sacrifice">Gross</option>
+                            <option value="net_sacrifice">Net</option>
+                          </select>
+                          <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
+                            <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
+                          </select>
+                          <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

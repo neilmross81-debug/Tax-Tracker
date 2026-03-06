@@ -301,8 +301,8 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 <div style={{
                     position: 'fixed', bottom: '10.5rem', right: '1.5rem',
                     width: 'min(420px, calc(100vw - 2rem))', height: '540px',
-                    background: 'rgba(15, 23, 42, 0.97)', backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(99, 102, 241, 0.4)', borderRadius: '1.25rem',
+                    background: 'var(--ai-panel-bg)', backdropFilter: 'blur(20px)',
+                    border: '1px solid var(--ai-panel-border)', borderRadius: '1.25rem',
                     display: 'flex', flexDirection: 'column', zIndex: 1000,
                     boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
                     overflow: 'hidden',
@@ -442,8 +442,8 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             placeholder={pendingPayslip?.awaitingMonth ? "Which month is this payslip for?" : (pendingPayslip && pendingPayslip.monthIdx !== null) ? `Type 'yes' to update ${MONTHS[pendingPayslip.monthIdx]}…` : "Ask about your taxes…"}
                             rows={1}
                             style={{
-                                flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)',
-                                borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'white', fontSize: '0.85rem',
+                                flex: 1, background: 'var(--input-bg)', border: '1px solid var(--glass-border)',
+                                borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'var(--text-main)', fontSize: '0.85rem',
                                 resize: 'none', outline: 'none', lineHeight: 1.5, maxHeight: '100px', overflowY: 'auto',
                             }}
                         />

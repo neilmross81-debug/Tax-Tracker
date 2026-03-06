@@ -344,15 +344,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                         {messages.length === 0 && (
                             <div style={{ textAlign: 'center', marginTop: '1rem' }}>
                                 <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🧑‍💼</div>
-                                <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Your personal tax advisor</div>
-                                <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.5rem' }}>Ask me anything, or scan a payslip to auto-import your data.</div>
+                                <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-main)' }}>Your personal tax advisor</div>
+                                <div style={{ fontSize: '0.8rem', opacity: 0.6, marginBottom: '0.5rem', color: 'var(--text-main)' }}>Ask me anything, or scan a payslip to auto-import your data.</div>
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
                                     style={{
                                         display: 'flex', alignItems: 'center', gap: '0.4rem',
                                         margin: '0 auto 1rem', background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.3))',
                                         border: '1px solid rgba(99,102,241,0.4)', borderRadius: '0.75rem',
-                                        padding: '0.6rem 1rem', color: 'white', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                                        padding: '0.6rem 1rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                                        color: 'var(--text-main)'
                                     }}
                                 >
                                     <ImageIcon size={15} /> 📎 Scan a Payslip
@@ -364,7 +365,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                             onClick={() => sendMessage(q)}
                                             style={{
                                                 background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)',
-                                                borderRadius: '0.6rem', padding: '0.5rem 0.75rem', color: 'white',
+                                                borderRadius: '0.6rem', padding: '0.5rem 0.75rem', color: 'var(--text-main)',
                                                 cursor: 'pointer', fontSize: '0.78rem', textAlign: 'left', transition: 'background 0.15s',
                                             }}
                                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.25)'}
@@ -379,16 +380,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             <div key={i} style={{ display: 'flex', gap: '0.6rem', flexDirection: msg.role === 'user' ? 'row-reverse' : 'row', alignItems: 'flex-start' }}>
                                 <div style={{
                                     width: '1.8rem', height: '1.8rem', borderRadius: '50%', flexShrink: 0,
-                                    background: msg.role === 'user' ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: msg.role === 'user' ? 'var(--input-bg)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--glass-border)'
                                 }}>
-                                    {msg.role === 'user' ? <User size={10} color="white" /> : <Bot size={10} color="white" />}
+                                    {msg.role === 'user' ? <User size={10} color="var(--text-main)" /> : <Bot size={10} color="white" />}
                                 </div>
                                 <div style={{
-                                    background: msg.role === 'user' ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.05)',
-                                    border: `1px solid ${msg.role === 'user' ? 'rgba(99,102,241,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                                    background: msg.role === 'user' ? 'rgba(99,102,241,0.15)' : 'var(--input-bg)',
+                                    border: `1px solid ${msg.role === 'user' ? 'rgba(99,102,241,0.3)' : 'var(--glass-border)'}`,
                                     borderRadius: msg.role === 'user' ? '1rem 0.25rem 1rem 1rem' : '0.25rem 1rem 1rem 1rem',
-                                    padding: '0.6rem 0.9rem', maxWidth: '85%', fontSize: '0.82rem', lineHeight: 1.6, color: 'rgba(255,255,255,0.9)',
+                                    padding: '0.6rem 0.9rem', maxWidth: '85%', fontSize: '0.82rem', lineHeight: 1.6, color: 'var(--text-main)',
                                 }}>
                                     {msg.image && <img src={msg.image} alt="payslip" style={{ width: '100%', borderRadius: '0.5rem', marginBottom: '0.4rem', opacity: 0.85 }} />}
                                     {msg.role === 'user' && !msg.image ? msg.content : formatMessage(msg.content)}
@@ -401,7 +402,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                 <div style={{ width: '1.8rem', height: '1.8rem', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                     <Bot size={10} color="white" />
                                 </div>
-                                <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '0.25rem 1rem 1rem 1rem', padding: '0.75rem 1rem' }}>
+                                <div style={{ background: 'var(--input-bg)', border: '1px solid var(--glass-border)', borderRadius: '0.25rem 1rem 1rem 1rem', padding: '0.75rem 1rem' }}>
                                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                                         {[0, 1, 2].map(i => (
                                             <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)', animation: `bounce 1.2s ${i * 0.2}s ease-in-out infinite` }} />
@@ -421,7 +422,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     </div>
 
                     {/* Input */}
-                    <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'flex-end' }}>
+                    <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--glass-border)', display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'flex-end', background: 'var(--ai-panel-bg)' }}>
                         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
                         <button
                             onClick={() => fileInputRef.current?.click()}
@@ -432,7 +433,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                             }}
                         >
-                            <Paperclip size={16} color="rgba(165,180,252,0.9)" />
+                            <Paperclip size={16} color="var(--primary)" />
                         </button>
                         <textarea
                             ref={inputRef}
@@ -451,12 +452,12 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             onClick={() => sendMessage()}
                             disabled={!input.trim() || isLoading}
                             style={{
-                                background: input.trim() && !isLoading ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255,255,255,0.05)',
+                                background: input.trim() && !isLoading ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'var(--glass-border)',
                                 border: 'none', borderRadius: '0.75rem', padding: '0.6rem 0.85rem',
                                 cursor: input.trim() && !isLoading ? 'pointer' : 'not-allowed', transition: 'all 0.2s', flexShrink: 0,
                             }}
                         >
-                            <Send size={16} color={input.trim() && !isLoading ? 'white' : 'rgba(255,255,255,0.3)'} />
+                            <Send size={16} color={input.trim() && !isLoading ? 'white' : 'var(--text-main)'} />
                         </button>
                     </div>
                 </div>

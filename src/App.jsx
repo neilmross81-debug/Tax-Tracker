@@ -84,6 +84,9 @@ function App() {
   const [tourStep, setTourStep] = useState(null);
   const [showOtModal, setShowOtModal] = useState(false);
   const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
+
+  const [showBaseModifierModal, setShowBaseModifierModal] = useState(false);
+  const [baseModifierModalData, setBaseModifierModalData] = useState({ id: null, type: 'enhancement', name: '', amount: '', frequency: 'monthly', sacrificeType: 'salary_sacrifice' });
   // null or index
   const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
 
@@ -1456,7 +1459,7 @@ function App() {
               <div style={{ marginTop: '1rem' }}>
                 <div className="stat-label">Current Tax Code</div>
                 <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <span style={{ color: isCodeCorrect ? 'white' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
+                  <span style={{ color: isCodeCorrect ? 'var(--text-main)' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
                   {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Recommended: {recommendedCode}</span>}
                 </div>
                 {!isCodeCorrect && (
@@ -1655,46 +1658,54 @@ function App() {
                   <div>
                     <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
                       Recurring Enhancements
-                      <button className="btn-add" onClick={() => addBaseItem('enhancement')} title="Add Enhancement">
+                      <button className="btn-add" onClick={() => {
+                        setBaseModifierModalData({ id: null, type: 'enhancement', name: '', amount: '', frequency: 'annual', sacrificeType: 'salary_sacrifice' });
+                        setShowBaseModifierModal(true);
+                      }} title="Add Enhancement">
                         <Plus size={16} />
                       </button>
                     </div>
                     {baseEnhancements.map(e => (
-                      <div key={e.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                        <input placeholder="Name" value={e.name} onChange={(v) => updateBaseItem('enhancement', e.id, 'name', v.target.value)} className="input-field" />
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <input type="number" placeholder="Amt" value={e.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('enhancement', e.id, 'amount', n))} className="input-field" />
-                          <select value={e.frequency} onChange={(v) => updateBaseItem('enhancement', e.id, 'frequency', v.target.value)} className="input-field">
-                            <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                          </select>
-                          <button className="btn-icon" onClick={() => removeBaseItem('enhancement', e.id)}><Trash2 size={14} /></button>
+                      <div key={e.id} className="overtime-line glass-card clickable" style={{ borderLeft: '4px solid var(--success)', marginBottom: '0.75rem', padding: '0.75rem', cursor: 'pointer' }} onClick={() => {
+                        setBaseModifierModalData({ id: e.id, type: 'enhancement', name: e.name, amount: e.amount, frequency: e.frequency || 'monthly', sacrificeType: e.type || 'income' });
+                        setShowBaseModifierModal(true);
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold' }}>{e.name}</div>
+                            <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{e.frequency.charAt(0).toUpperCase() + e.frequency.slice(1)}</div>
+                          </div>
+                          <div style={{ fontWeight: 600, color: 'var(--success)' }}>+£{Number(e.amount).toLocaleString()}</div>
                         </div>
                       </div>
                     ))}
+                    {baseEnhancements.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5, textAlign: 'center', marginTop: '1rem' }}>No enhancements.</p>}
                   </div>
                   <div>
                     <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
                       Recurring Sacrifices
-                      <button className="btn-add" onClick={() => addBaseItem('sacrifice')} title="Add Sacrifice">
+                      <button className="btn-add" onClick={() => {
+                        setBaseModifierModalData({ id: null, type: 'sacrifice', name: '', amount: '', frequency: 'annual', sacrificeType: 'salary_sacrifice' });
+                        setShowBaseModifierModal(true);
+                      }} title="Add Sacrifice">
                         <Plus size={16} />
                       </button>
                     </div>
                     {baseSacrifices.map(d => (
-                      <div key={d.id} className="income-line" style={{ marginBottom: '1rem' }}>
-                        <input placeholder="Name" value={d.name} onChange={(v) => updateBaseItem('sacrifice', d.id, 'name', v.target.value)} className="input-field" />
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
-                          <input type="number" placeholder="Amt" value={d.amount} onChange={(v) => handleNumericInput(v.target.value, (n) => updateBaseItem('sacrifice', d.id, 'amount', n))} className="input-field" />
-                          <select value={d.type} onChange={(v) => updateBaseItem('sacrifice', d.id, 'type', v.target.value)} className="input-field">
-                            <option value="salary_sacrifice">Gross</option>
-                            <option value="net_sacrifice">Net</option>
-                          </select>
-                          <select value={d.frequency} onChange={(v) => updateBaseItem('sacrifice', d.id, 'frequency', v.target.value)} className="input-field">
-                            <option value="annual">Annual</option><option value="monthly">Monthly</option><option value="hourly">Hourly</option>
-                          </select>
-                          <button className="btn-icon" onClick={() => removeBaseItem('sacrifice', d.id)}><Trash2 size={14} /></button>
+                      <div key={d.id} className="overtime-line glass-card clickable" style={{ borderLeft: '4px solid var(--error)', marginBottom: '0.75rem', padding: '0.75rem', cursor: 'pointer' }} onClick={() => {
+                        setBaseModifierModalData({ id: d.id, type: 'sacrifice', name: d.name, amount: d.amount, frequency: d.frequency || 'monthly', sacrificeType: d.type || 'salary_sacrifice' });
+                        setShowBaseModifierModal(true);
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold' }}>{d.name}</div>
+                            <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{d.frequency.charAt(0).toUpperCase() + d.frequency.slice(1)} • {d.type === 'salary_sacrifice' ? 'Gross' : 'Net'}</div>
+                          </div>
+                          <div style={{ fontWeight: 600, color: 'var(--error)' }}>-£{Number(d.amount).toLocaleString()}</div>
                         </div>
                       </div>
                     ))}
+                    {baseSacrifices.length === 0 && <p style={{ fontSize: '0.8rem', opacity: 0.5, textAlign: 'center', marginTop: '1rem' }}>No sacrifices.</p>}
                   </div>
                 </div>
               </div>
@@ -1814,6 +1825,93 @@ function App() {
           <span>Settings</span>
         </div>
       </nav>
+
+      {showBaseModifierModal && (
+        <div className="modal-overlay" onClick={() => setShowBaseModifierModal(false)}>
+          <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0 }}>{baseModifierModalData.id ? `Edit ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}` : `Add ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}`}</h2>
+              <button className="btn-icon" onClick={() => setShowBaseModifierModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
+            </div>
+
+            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr', gap: '1rem', marginTop: 0 }}>
+              <div>
+                <label className="stat-label">Description / Name</label>
+                <input className="input-field" value={baseModifierModalData.name} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, name: e.target.value })} placeholder="e.g. Car Allowance" />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label className="stat-label">Amount (£)</label>
+                  <input type="number" className="input-field" value={baseModifierModalData.amount} onChange={e => handleNumericInput(e.target.value, (v) => setBaseModifierModalData({ ...baseModifierModalData, amount: v }))} placeholder="0" />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label className="stat-label">Frequency</label>
+                  <select className="input-field" value={baseModifierModalData.frequency} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, frequency: e.target.value })}>
+                    <option value="annual" style={{ background: '#1e293b' }}>Annual</option>
+                    <option value="monthly" style={{ background: '#1e293b' }}>Monthly</option>
+                    <option value="hourly" style={{ background: '#1e293b' }}>Hourly</option>
+                  </select>
+                </div>
+              </div>
+              {baseModifierModalData.type === 'sacrifice' && (
+                <div>
+                  <label className="stat-label">Sacrifice Type</label>
+                  <select className="input-field" value={baseModifierModalData.sacrificeType} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, sacrificeType: e.target.value })}>
+                    <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Gross / Pre-Tax</option>
+                    <option value="net_sacrifice" style={{ background: '#1e293b' }}>Net / Post-Tax</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+              {baseModifierModalData.id && (
+                <button
+                  className="btn-secondary"
+                  style={{ color: 'var(--error)', borderColor: 'var(--error)' }}
+                  onClick={() => {
+                    removeBaseItem(baseModifierModalData.type, baseModifierModalData.id);
+                    setShowBaseModifierModal(false);
+                  }}
+                >
+                  Delete
+                </button>
+              )}
+              <button
+                className="btn-primary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  const idToUse = baseModifierModalData.id || Date.now().toString();
+                  const newItem = {
+                    id: idToUse,
+                    name: baseModifierModalData.name || 'Unnamed',
+                    amount: Number(baseModifierModalData.amount) || 0,
+                    frequency: baseModifierModalData.frequency,
+                    type: baseModifierModalData.type === 'sacrifice' ? baseModifierModalData.sacrificeType : 'income'
+                  };
+
+                  if (baseModifierModalData.type === 'enhancement') {
+                    if (baseModifierModalData.id) {
+                      setBaseEnhancements(baseEnhancements.map(i => i.id === idToUse ? newItem : i));
+                    } else {
+                      setBaseEnhancements([...baseEnhancements, newItem]);
+                    }
+                  } else {
+                    if (baseModifierModalData.id) {
+                      setBaseSacrifices(baseSacrifices.map(i => i.id === idToUse ? newItem : i));
+                    } else {
+                      setBaseSacrifices([...baseSacrifices, newItem]);
+                    }
+                  }
+                  setShowBaseModifierModal(false);
+                }}
+              >
+                {baseModifierModalData.id ? 'Save Changes' : 'Add Modifier'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showOtModal && (
         <div className="modal-overlay" onClick={() => setShowOtModal(false)}>

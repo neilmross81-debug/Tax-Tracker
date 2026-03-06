@@ -127,7 +127,8 @@ body {
   padding: 0.75rem;
   border-radius: 0.5rem;
   width: 100%;
-  box-sizing: border-box;
+  max-width: 100%;
+  box-sizing: border-box !important;
   font-size: 1rem;
   transition: background 0.3s ease, color 0.3s ease;
 }
@@ -395,8 +396,9 @@ select.input-field {
 
 .modal-content {
   width: 100%;
-  max-width: 450px;
+  max-width: min(450px, calc(100vw - 2rem));
   box-sizing: border-box;
+  overflow-x: hidden;
   animation: modalEnter 0.3s ease-out;
 }
 

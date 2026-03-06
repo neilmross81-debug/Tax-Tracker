@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { X, Send, Bot, User, Sparkles, Paperclip, ImageIcon } from 'lucide-react';
+import { X, Send, Bot, User, Sparkles, Paperclip, ImageIcon, Trash2 } from 'lucide-react';
 
 // GEMINI_API_KEY is now managed via props in the App settings.
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
@@ -198,12 +198,13 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         }
 
         try {
-            const genAI = new GoogleGenerativeAI(geminiApiKey);
+            const trimmedKey = geminiApiKey.trim();
+            const genAI = new GoogleGenerativeAI(trimmedKey);
 
             if (imageFile) {
                 // Payslip scan mode — use multimodal
                 const base64 = await fileToBase64(imageFile);
-                const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
                 const result = await model.generateContent([
                     { inlineData: { mimeType: imageFile.type, data: base64 } },
                     buildPayslipExtractionPrompt(),
@@ -234,8 +235,8 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             } else {
                 // Normal chat mode - limit to last 10 messages to save Token Quota
                 const model = genAI.getGenerativeModel({
-                    model: 'gemini-2.0-flash',
-                    systemInstruction: buildSystemPrompt(analyticsData, workMode, taxCode, taxYear),
+                    model: 'gemini-1.5-flash',
+                    systemInstruction: buildSystemPrompt(analyticsData, workMode, taxCode, taxYear) || "You are a helpful UK tax advisor assistant.",
                 });
                 const history = newMessages.slice(-10, -1)
                     .filter(m => !m.image)
@@ -250,11 +251,12 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             }
         } catch (err) {
             console.error('Gemini error:', err);
-            const errMsg = err.message?.includes('429')
-                ? 'Google API Free Tier Limit: You can only ask 15 questions per minute. Please pause for 60 seconds and try again!'
-                : err.message?.includes('API_KEY_INVALID')
+            const rawMessage = err.message || '';
+            const errMsg = rawMessage.includes('429')
+                ? `Google API Quota Error: ${rawMessage}. (Usually means 15 requests/min limit hit, or the key hasn't activated yet).`
+                : rawMessage.includes('API_KEY_INVALID')
                     ? 'Your API Key appears to be invalid. Please check it in the Settings tab.'
-                    : `Error: ${err.message || 'Could not reach AI. Please try again.'}`;
+                    : `Error: ${rawMessage || 'Could not reach AI. Please try again.'}`;
             setError(errMsg);
         } finally {
             setIsLoading(false);
@@ -331,13 +333,27 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                 <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Powered by Gemini · Payslip Scanner ✨</div>
                             </div>
                         </div>
-                        <button
-                            onClick={() => { fileInputRef.current?.click(); }}
-                            title="Upload a payslip"
-                            style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', cursor: 'pointer', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'white', fontSize: '0.72rem', fontWeight: 600 }}
-                        >
-                            <ImageIcon size={13} /> Scan Payslip
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm("Clear all messages?")) {
+                                        setMessages([]);
+                                        setError('');
+                                    }
+                                }}
+                                title="Clear chat history"
+                                style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.4)', cursor: 'pointer', padding: '0.4rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff8080' }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                            <button
+                                onClick={() => { fileInputRef.current?.click(); }}
+                                title="Upload a payslip"
+                                style={{ background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)', cursor: 'pointer', padding: '0.4rem 0.6rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'white', fontSize: '0.72rem', fontWeight: 600 }}
+                            >
+                                <ImageIcon size={14} /> <span>Scan Payslip</span>
+                            </button>
+                        </div>
                     </div>
 
                     {/* Payslip pending indicator */}

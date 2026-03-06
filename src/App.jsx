@@ -1688,18 +1688,28 @@ function App() {
                     <button
                       className="btn-primary"
                       style={{ padding: '0 1rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                      onClick={async () => {
+                      onClick={async (e) => {
                         if (!geminiApiKey) return alert("Please paste a key first");
-                        const btn = event.currentTarget;
+                        const btn = e.currentTarget;
                         btn.disabled = true;
                         btn.innerText = "Testing...";
                         try {
                           const genAI = new GoogleGenerativeAI(geminiApiKey.trim());
-                          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                          await model.generateContent("Say 'Connection Successful'");
+                          const tryTest = async (models) => {
+                            let lastE = null;
+                            for (const modelName of models) {
+                              try {
+                                const model = genAI.getGenerativeModel({ model: modelName });
+                                await model.generateContent("Say 'OK'");
+                                return true;
+                              } catch (err) { lastE = err; }
+                            }
+                            throw lastE;
+                          };
+                          await tryTest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']);
                           alert("✅ Connection Successful! Your key is working.");
-                        } catch (e) {
-                          alert(`❌ Connection Failed: ${e.message}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`);
+                        } catch (err) {
+                          alert(`❌ Connection Failed: ${err.message}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`);
                         } finally {
                           btn.disabled = false;
                           btn.innerText = "Test Key";

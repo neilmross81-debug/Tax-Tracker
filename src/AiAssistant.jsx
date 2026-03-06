@@ -239,7 +239,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             };
 
             // Try standard flash names first, then fall back to experimental or pro
-            const { responseText } = await tryRequest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']);
+            const { responseText } = await tryRequest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
 
             if (imageFile) {
                 const extracted = parsePayslipJson(responseText);
@@ -267,11 +267,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         } catch (err) {
             console.error('Gemini error:', err);
             const rawMessage = err.message || '';
-            const errMsg = rawMessage.includes('429')
-                ? `Google API Quota Error: ${rawMessage}. (Usually means 15 requests/min limit hit, or the key hasn't activated yet).`
-                : rawMessage.includes('API_KEY_INVALID')
-                    ? 'Your API Key appears to be invalid. Please check it in the Settings tab.'
-                    : `Error: ${rawMessage || 'Could not reach AI. Please try again.'}`;
+            let errMsg = `Error: ${rawMessage || 'Could not reach AI. Please try again.'}`;
+
+            if (rawMessage.includes('limit: 0')) {
+                errMsg = "Google is reporting a 'Limit 0' for your key. This almost always means the key is brand new and still 'thawing'. Please wait 2-5 minutes and it should start working automatically.";
+            } else if (rawMessage.includes('429')) {
+                errMsg = `Google API Quota Error: ${rawMessage}. (Usually means 15 requests/min limit hit).`;
+            } else if (rawMessage.includes('API_KEY_INVALID')) {
+                errMsg = 'Your API Key appears to be invalid. Please check it in the Settings tab.';
+            }
+
             setError(errMsg);
         } finally {
             setIsLoading(false);

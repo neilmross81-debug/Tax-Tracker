@@ -990,7 +990,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.4</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.5</span>
           </h1>
         </div>
 
@@ -1706,10 +1706,14 @@ function App() {
                             }
                             throw lastE;
                           };
-                          await tryTest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash']);
+                          await tryTest(['gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro']);
                           alert("✅ Connection Successful! Your key is working.");
                         } catch (err) {
-                          alert(`❌ Connection Failed: ${err.message}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`);
+                          const msg = err.message || '';
+                          const help = msg.includes('limit: 0')
+                            ? "❌ Connection Failed: Google is reporting 'Limit 0'. This means your key is brand new. Please wait 2-5 minutes for it to activate and test again."
+                            : `❌ Connection Failed: ${msg}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`;
+                          alert(help);
                         } finally {
                           btn.disabled = false;
                           btn.innerText = "Test Key";

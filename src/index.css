@@ -128,9 +128,18 @@ body {
   border-radius: 0.5rem;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
+  display: block;
   box-sizing: border-box !important;
   font-size: 1rem;
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+input[type="date"].input-field {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 3rem;
+  /* maintain tap target since appearance is removed */
 }
 
 ::placeholder {

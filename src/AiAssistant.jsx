@@ -226,12 +226,12 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
                 }
             } else {
-                // Normal chat mode
+                // Normal chat mode - limit to last 10 messages to save Token Quota
                 const model = genAI.getGenerativeModel({
                     model: 'gemini-2.0-flash',
                     systemInstruction: buildSystemPrompt(analyticsData, workMode, taxCode, taxYear),
                 });
-                const history = newMessages.slice(0, -1)
+                const history = newMessages.slice(-10, -1)
                     .filter(m => !m.image)
                     .map(m => ({
                         role: m.role === 'user' ? 'user' : 'model',

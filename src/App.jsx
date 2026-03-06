@@ -70,9 +70,9 @@ function App() {
   const [sandboxGiftAid, setSandboxGiftAid] = useState(null);
   const [sandboxSEAllowance, setSandboxSEAllowance] = useState(null);
 
-  const [baseEnhancements, setBaseEnhancements] = useState([]);
   const [baseSacrifices, setBaseSacrifices] = useState([]);
   const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [sandboxBaselineNet, setSandboxBaselineNet] = useState(null);
 
   // --- Self-Employment State ---
   const [workMode, setWorkMode] = useState('paye'); // 'paye' | 'se' | 'both'
@@ -204,8 +204,8 @@ function App() {
       tab: 'config'
     },
     {
-      title: "2. Mercer (Salary Sacrifice)",
-      content: "If you have a Mercer pension or other Salary Sacrifice scheme, select it here to see your extra NI savings!",
+      title: "2. Pension (Salary Sacrifice)",
+      content: "If you have a Salary Sacrifice pension scheme, select it here to see your extra NI savings!",
       target: "#tour-pension-type",
       tab: 'config'
     },
@@ -496,7 +496,7 @@ function App() {
       const withoutPensionOptions = { ...options, pensionIsSS: false, omitAllPension: true };
       const withoutPensionProj = projectAnnual(monthsActualData, futureBaseData, selectedMonthIdx, taxCode, withoutPensionOptions);
       sacrificeItemsSavings.push({
-        name: 'Pension (Mercer SS)',
+        name: 'Pension (Salary Sacrifice)',
         amount: currentProjected.pensionContribution,
         taxSaved: Math.max(0, withoutPensionProj.incomeTax - currentProjected.incomeTax),
         niSaved: Math.max(0, withoutPensionProj.ni - currentProjected.ni)
@@ -624,9 +624,16 @@ function App() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
               <div>
                 <div className="stat-label">Total Gross Income</div>
-                <div className="stat-value">£{(analyticsData.projections.gross + (analyticsData.seProfit / (seData.useTradingAllowance ? 1 : 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div className="stat-value">£{(analyticsData.projections.gross + analyticsData.seProfit).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.25rem' }}>
                   PAYE: £{analyticsData.projections.gross.toLocaleString()} | SE: £{analyticsData.seProfit.toLocaleString()}
+                </div>
+              </div>
+              <div>
+                <div className="stat-label">Taxable Annual Pay (ANI)</div>
+                <div className="stat-value" style={{ color: 'var(--primary)' }}>£{analyticsData.projections.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                  This is your income after all pre-tax deductions.
                 </div>
               </div>
               <div>
@@ -990,7 +997,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.6</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.0</span>
           </h1>
         </div>
 
@@ -1006,6 +1013,10 @@ function App() {
               }
               setSandboxSipp(0);
               setSandboxGiftAid(0);
+              // Capture baseline net pay for comparison
+              setSandboxBaselineNet(analyticsData.totalTakeHome);
+            } else {
+              setSandboxBaselineNet(null);
             }
             setSandboxMode(!sandboxMode);
           }}
@@ -1102,27 +1113,55 @@ function App() {
               />
               <div style={{ textAlign: 'center', fontWeight: 'bold', marginTop: '0.4rem' }}>£{(sandboxSacrifice !== null ? sandboxSacrifice : 0).toLocaleString()}</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gridColumn: '1 / -1' }}>
-              <button
-                onClick={() => {
-                  if (sandboxSalary !== null) setBaseSalary(sandboxSalary);
-                  if (sandboxPension !== null) setPensionPercent(sandboxPension);
+          </div>
 
-                  if (sandboxOvertime > 0) {
-                    setBaseEnhancements([...baseEnhancements, { id: Date.now().toString() + 'ot', name: 'Sandbox OT', amount: sandboxOvertime, frequency: 'annual', type: 'income' }]);
-                  }
-                  if (sandboxSacrifice > 0) {
-                    setBaseSacrifices([...baseSacrifices, { id: Date.now().toString() + 'sac', name: 'Sandbox Sacrifice', amount: sandboxSacrifice, frequency: 'annual', type: 'salary_sacrifice' }]);
-                  }
-
-                  setSandboxMode(false);
-                }}
-                className="btn-primary"
-                style={{ width: '100%', padding: '0.6rem' }}
-              >
-                Apply to Main
-              </button>
+          {/* Comparison Row */}
+          {sandboxBaselineNet !== null && (
+            <div style={{ marginTop: '1rem', paddingTop: '1.5rem', borderTop: '1px dashed rgba(255, 255, 255, 0.1)', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', padding: '1.5rem', borderRadius: '1rem' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.3rem' }}>Original Net</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 600 }}>£{sandboxBaselineNet.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div style={{ fontSize: '1.5rem', opacity: 0.2 }}>→</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.7rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.3rem' }}>Hypothetical Net</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--primary)' }}>£{analyticsData.totalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
+              <div style={{
+                padding: '0.6rem 1.2rem',
+                borderRadius: '2rem',
+                background: (analyticsData.totalTakeHome - sandboxBaselineNet) >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                color: (analyticsData.totalTakeHome - sandboxBaselineNet) >= 0 ? '#10b981' : '#f43f5e',
+                fontWeight: 800,
+                fontSize: '1rem',
+                border: '1px solid currentColor',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}>
+                {(analyticsData.totalTakeHome - sandboxBaselineNet) >= 0 ? '+' : ''}£{(analyticsData.totalTakeHome - sandboxBaselineNet).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} Diff
+              </div>
             </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.5rem', gap: '1rem' }}>
+            <button
+              onClick={() => {
+                if (sandboxSalary !== null) setBaseSalary(sandboxSalary);
+                if (sandboxPension !== null) setPensionPercent(sandboxPension);
+
+                if (sandboxOvertime > 0) {
+                  setBaseEnhancements([...baseEnhancements, { id: Date.now().toString() + 'ot', name: 'Sandbox OT', amount: sandboxOvertime, frequency: 'annual', type: 'income' }]);
+                }
+                if (sandboxSacrifice > 0) {
+                  setBaseSacrifices([...baseSacrifices, { id: Date.now().toString() + 'sac', name: 'Sandbox Sacrifice', amount: sandboxSacrifice, frequency: 'annual', type: 'salary_sacrifice' }]);
+                }
+
+                setSandboxMode(false);
+              }}
+              className="btn-primary"
+              style={{ width: '100%', padding: '0.6rem' }}
+            >
+              Apply to Main
+            </button>
           </div>
         </div>
       )}
@@ -1170,7 +1209,8 @@ function App() {
             </div>
           </div>
         </div>
-      )}
+      )
+      }
 
       <main style={{ paddingBottom: '5rem' }}>
         {activeTab === 'dashboard' && (
@@ -1278,7 +1318,7 @@ function App() {
                   <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Pre-Tax Deductions</div>
                   {pensionType === 'salary_sacrifice' && monthlyPension > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                      <span style={{ opacity: 0.75 }}>Pension (Mercer SS)</span>
+                      <span style={{ opacity: 0.75 }}>Pension (Salary Sacrifice)</span>
                       <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   )}
@@ -1627,10 +1667,10 @@ function App() {
                 <div className="dashboard-grid" style={{ marginTop: 0 }}>
                   <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
                   <div>
-                    <label className="stat-label">Pension Type (Mercer SS?)</label>
+                    <label className="stat-label">Pension Type (Salary Sacrifice?)</label>
                     <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
                       <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
-                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Mercer)</option>
+                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (e.g. Mercer)</option>
                     </select>
                   </div>
                   <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
@@ -1920,177 +1960,181 @@ function App() {
         </div>
       </nav>
 
-      {showBaseModifierModal && (
-        <div className="modal-overlay" onClick={() => setShowBaseModifierModal(false)}>
-          <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0 }}>{baseModifierModalData.id ? `Edit ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}` : `Add ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}`}</h2>
-              <button className="btn-icon" onClick={() => setShowBaseModifierModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
-            </div>
+      {
+        showBaseModifierModal && (
+          <div className="modal-overlay" onClick={() => setShowBaseModifierModal(false)}>
+            <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0 }}>{baseModifierModalData.id ? `Edit ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}` : `Add ${baseModifierModalData.type === 'enhancement' ? 'Enhancement' : 'Sacrifice'}`}</h2>
+                <button className="btn-icon" onClick={() => setShowBaseModifierModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
-              <div>
-                <label className="stat-label">Description / Name</label>
-                <input className="input-field" value={baseModifierModalData.name} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, name: e.target.value })} placeholder="e.g. Car Allowance" />
-              </div>
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                  <label className="stat-label">Amount (£)</label>
-                  <input type="number" className="input-field" value={baseModifierModalData.amount} onChange={e => handleNumericInput(e.target.value, (v) => setBaseModifierModalData({ ...baseModifierModalData, amount: v }))} placeholder="0" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label className="stat-label">Frequency</label>
-                  <select className="input-field" value={baseModifierModalData.frequency} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, frequency: e.target.value })}>
-                    <option value="annual" style={{ background: '#1e293b' }}>Annual</option>
-                    <option value="monthly" style={{ background: '#1e293b' }}>Monthly</option>
-                    <option value="hourly" style={{ background: '#1e293b' }}>Hourly</option>
-                  </select>
-                </div>
-              </div>
-              {baseModifierModalData.type === 'sacrifice' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
                 <div>
-                  <label className="stat-label">Sacrifice Type</label>
-                  <select className="input-field" value={baseModifierModalData.sacrificeType} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, sacrificeType: e.target.value })}>
-                    <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Gross / Pre-Tax</option>
-                    <option value="net_sacrifice" style={{ background: '#1e293b' }}>Net / Post-Tax</option>
-                  </select>
+                  <label className="stat-label">Description / Name</label>
+                  <input className="input-field" value={baseModifierModalData.name} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, name: e.target.value })} placeholder="e.g. Car Allowance" />
                 </div>
-              )}
-            </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <label className="stat-label">Amount (£)</label>
+                    <input type="number" className="input-field" value={baseModifierModalData.amount} onChange={e => handleNumericInput(e.target.value, (v) => setBaseModifierModalData({ ...baseModifierModalData, amount: v }))} placeholder="0" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label className="stat-label">Frequency</label>
+                    <select className="input-field" value={baseModifierModalData.frequency} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, frequency: e.target.value })}>
+                      <option value="annual" style={{ background: '#1e293b' }}>Annual</option>
+                      <option value="monthly" style={{ background: '#1e293b' }}>Monthly</option>
+                      <option value="hourly" style={{ background: '#1e293b' }}>Hourly</option>
+                    </select>
+                  </div>
+                </div>
+                {baseModifierModalData.type === 'sacrifice' && (
+                  <div>
+                    <label className="stat-label">Sacrifice Type</label>
+                    <select className="input-field" value={baseModifierModalData.sacrificeType} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, sacrificeType: e.target.value })}>
+                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Gross / Pre-Tax</option>
+                      <option value="net_sacrifice" style={{ background: '#1e293b' }}>Net / Post-Tax</option>
+                    </select>
+                  </div>
+                )}
+              </div>
 
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-              {baseModifierModalData.id && (
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                {baseModifierModalData.id && (
+                  <button
+                    className="btn-secondary"
+                    style={{ color: 'var(--error)', borderColor: 'var(--error)' }}
+                    onClick={() => {
+                      removeBaseItem(baseModifierModalData.type, baseModifierModalData.id);
+                      setShowBaseModifierModal(false);
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
                 <button
-                  className="btn-secondary"
-                  style={{ color: 'var(--error)', borderColor: 'var(--error)' }}
+                  className="btn-primary"
+                  style={{ flex: 1 }}
                   onClick={() => {
-                    removeBaseItem(baseModifierModalData.type, baseModifierModalData.id);
+                    const idToUse = baseModifierModalData.id || Date.now().toString();
+                    const newItem = {
+                      id: idToUse,
+                      name: baseModifierModalData.name || 'Unnamed',
+                      amount: Number(baseModifierModalData.amount) || 0,
+                      frequency: baseModifierModalData.frequency,
+                      type: baseModifierModalData.type === 'sacrifice' ? baseModifierModalData.sacrificeType : 'income'
+                    };
+
+                    if (baseModifierModalData.type === 'enhancement') {
+                      if (baseModifierModalData.id) {
+                        setBaseEnhancements(baseEnhancements.map(i => i.id === idToUse ? newItem : i));
+                      } else {
+                        setBaseEnhancements([...baseEnhancements, newItem]);
+                      }
+                    } else {
+                      if (baseModifierModalData.id) {
+                        setBaseSacrifices(baseSacrifices.map(i => i.id === idToUse ? newItem : i));
+                      } else {
+                        setBaseSacrifices([...baseSacrifices, newItem]);
+                      }
+                    }
                     setShowBaseModifierModal(false);
                   }}
                 >
-                  Delete
+                  {baseModifierModalData.id ? 'Save Changes' : 'Add Modifier'}
                 </button>
-              )}
-              <button
-                className="btn-primary"
-                style={{ flex: 1 }}
-                onClick={() => {
-                  const idToUse = baseModifierModalData.id || Date.now().toString();
-                  const newItem = {
-                    id: idToUse,
-                    name: baseModifierModalData.name || 'Unnamed',
-                    amount: Number(baseModifierModalData.amount) || 0,
-                    frequency: baseModifierModalData.frequency,
-                    type: baseModifierModalData.type === 'sacrifice' ? baseModifierModalData.sacrificeType : 'income'
-                  };
+              </div>
+            </div>
+          </div>
+        )
+      }
 
-                  if (baseModifierModalData.type === 'enhancement') {
-                    if (baseModifierModalData.id) {
-                      setBaseEnhancements(baseEnhancements.map(i => i.id === idToUse ? newItem : i));
-                    } else {
-                      setBaseEnhancements([...baseEnhancements, newItem]);
+      {
+        showOtModal && (
+          <div className="modal-overlay" onClick={() => setShowOtModal(false)}>
+            <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h2 style={{ margin: 0 }}>{otModalData.id ? 'Edit Overtime Entry' : 'Add Overtime'}</h2>
+                <button className="btn-icon" onClick={() => setShowOtModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 4, multiplier: 1.5 })}>4h @ 1.5x</button>
+                <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 12, multiplier: 2.0 })}>12h @ 2.0x</button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
+                <div>
+                  <label className="stat-label">Month Paid</label>
+                  <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>
+                    {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="stat-label">Date Worked</label>
+                  <input type="date" className="input-field" value={otModalData.date} onChange={e => setOtModalData({ ...otModalData, date: e.target.value })} />
+                </div>
+                <div>
+                  <label className="stat-label">Hours</label>
+                  <input type="number" className="input-field" value={otModalData.hours} onChange={e => handleNumericInput(e.target.value, (v) => setOtModalData({ ...otModalData, hours: v }))} placeholder="0" />
+                </div>
+                <div>
+                  <label className="stat-label">Multiplier</label>
+                  <select className="input-field" value={otModalData.multiplier} onChange={e => setOtModalData({ ...otModalData, multiplier: Number(e.target.value) })}>
+                    <option value={1.5}>1.5x</option>
+                    <option value={2.0}>2.0x</option>
+                    <option value={1.0}>1.0x</option>
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="stat-label">Reason / Reference</label>
+                  <input className="input-field" value={otModalData.reason} onChange={e => setOtModalData({ ...otModalData, reason: e.target.value })} placeholder="e.g. Weekend Coverage" />
+                </div>
+              </div>
+
+              <button
+                className="btn-primary btn-full"
+                style={{ marginTop: '2rem' }}
+                onClick={() => {
+                  const newMonths = [...months];
+                  if (otModalData.id) {
+                    // Edit mode
+                    const origIdx = otModalData.originalMonthIdx !== undefined ? otModalData.originalMonthIdx : otModalData.monthIdx;
+                    const currentMonthItems = newMonths[origIdx].overtime;
+                    const itemIndex = currentMonthItems.findIndex(i => i.id === otModalData.id);
+                    if (itemIndex > -1) {
+                      const updatedItem = { ...currentMonthItems[itemIndex], date: otModalData.date, reason: otModalData.reason, hours: Number(otModalData.hours) || 0, multiplier: otModalData.multiplier, monthIdx: otModalData.monthIdx };
+                      if (origIdx !== otModalData.monthIdx) {
+                        newMonths[origIdx].overtime = currentMonthItems.filter(i => i.id !== otModalData.id);
+                        newMonths[otModalData.monthIdx].overtime = [updatedItem, ...newMonths[otModalData.monthIdx].overtime];
+                      } else {
+                        currentMonthItems[itemIndex] = updatedItem;
+                      }
                     }
                   } else {
-                    if (baseModifierModalData.id) {
-                      setBaseSacrifices(baseSacrifices.map(i => i.id === idToUse ? newItem : i));
-                    } else {
-                      setBaseSacrifices([...baseSacrifices, newItem]);
-                    }
+                    // Add mode
+                    const newItem = {
+                      id: Date.now(),
+                      date: otModalData.date,
+                      reason: otModalData.reason,
+                      hours: Number(otModalData.hours) || 0,
+                      multiplier: otModalData.multiplier,
+                      claimed: false,
+                      monthIdx: otModalData.monthIdx
+                    };
+                    newMonths[otModalData.monthIdx].overtime = [newItem, ...newMonths[otModalData.monthIdx].overtime];
                   }
-                  setShowBaseModifierModal(false);
+                  setMonths(newMonths);
+                  setShowOtModal(false);
+                  setOtModalData({ id: null, date: new Date().toISOString().split('T')[0], hours: '', multiplier: 1.5, reason: '', monthIdx: selectedMonthIdx });
                 }}
               >
-                {baseModifierModalData.id ? 'Save Changes' : 'Add Modifier'}
+                {otModalData.id ? 'Save Changes' : 'Add Entry'}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {showOtModal && (
-        <div className="modal-overlay" onClick={() => setShowOtModal(false)}>
-          <div className="modal-content glass-card" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 style={{ margin: 0 }}>{otModalData.id ? 'Edit Overtime Entry' : 'Add Overtime'}</h2>
-              <button className="btn-icon" onClick={() => setShowOtModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 4, multiplier: 1.5 })}>4h @ 1.5x</button>
-              <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 12, multiplier: 2.0 })}>12h @ 2.0x</button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: 0 }}>
-              <div>
-                <label className="stat-label">Month Paid</label>
-                <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>
-                  {MONTHS.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="stat-label">Date Worked</label>
-                <input type="date" className="input-field" value={otModalData.date} onChange={e => setOtModalData({ ...otModalData, date: e.target.value })} />
-              </div>
-              <div>
-                <label className="stat-label">Hours</label>
-                <input type="number" className="input-field" value={otModalData.hours} onChange={e => handleNumericInput(e.target.value, (v) => setOtModalData({ ...otModalData, hours: v }))} placeholder="0" />
-              </div>
-              <div>
-                <label className="stat-label">Multiplier</label>
-                <select className="input-field" value={otModalData.multiplier} onChange={e => setOtModalData({ ...otModalData, multiplier: Number(e.target.value) })}>
-                  <option value={1.5}>1.5x</option>
-                  <option value={2.0}>2.0x</option>
-                  <option value={1.0}>1.0x</option>
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label className="stat-label">Reason / Reference</label>
-                <input className="input-field" value={otModalData.reason} onChange={e => setOtModalData({ ...otModalData, reason: e.target.value })} placeholder="e.g. Weekend Coverage" />
-              </div>
-            </div>
-
-            <button
-              className="btn-primary btn-full"
-              style={{ marginTop: '2rem' }}
-              onClick={() => {
-                const newMonths = [...months];
-                if (otModalData.id) {
-                  // Edit mode
-                  const origIdx = otModalData.originalMonthIdx !== undefined ? otModalData.originalMonthIdx : otModalData.monthIdx;
-                  const currentMonthItems = newMonths[origIdx].overtime;
-                  const itemIndex = currentMonthItems.findIndex(i => i.id === otModalData.id);
-                  if (itemIndex > -1) {
-                    const updatedItem = { ...currentMonthItems[itemIndex], date: otModalData.date, reason: otModalData.reason, hours: Number(otModalData.hours) || 0, multiplier: otModalData.multiplier, monthIdx: otModalData.monthIdx };
-                    if (origIdx !== otModalData.monthIdx) {
-                      newMonths[origIdx].overtime = currentMonthItems.filter(i => i.id !== otModalData.id);
-                      newMonths[otModalData.monthIdx].overtime = [updatedItem, ...newMonths[otModalData.monthIdx].overtime];
-                    } else {
-                      currentMonthItems[itemIndex] = updatedItem;
-                    }
-                  }
-                } else {
-                  // Add mode
-                  const newItem = {
-                    id: Date.now(),
-                    date: otModalData.date,
-                    reason: otModalData.reason,
-                    hours: Number(otModalData.hours) || 0,
-                    multiplier: otModalData.multiplier,
-                    claimed: false,
-                    monthIdx: otModalData.monthIdx
-                  };
-                  newMonths[otModalData.monthIdx].overtime = [newItem, ...newMonths[otModalData.monthIdx].overtime];
-                }
-                setMonths(newMonths);
-                setShowOtModal(false);
-                setOtModalData({ id: null, date: new Date().toISOString().split('T')[0], hours: '', multiplier: 1.5, reason: '', monthIdx: selectedMonthIdx });
-              }}
-            >
-              {otModalData.id ? 'Save Changes' : 'Add Entry'}
-            </button>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       {tourStep !== null && <TourOverlay />}
 
@@ -2112,7 +2156,7 @@ function App() {
           });
         }}
       />
-    </div>
+    </div >
   );
 }
 

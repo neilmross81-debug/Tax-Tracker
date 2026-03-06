@@ -989,7 +989,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.1</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v24.2</span>
           </h1>
         </div>
 
@@ -1663,22 +1663,51 @@ function App() {
                   To use the AI Tax Assistant and Payslip Scanner, you need to provide your own Google Gemini API Key.
                 </p>
                 <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem', borderLeft: '3px solid var(--primary)' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.5rem' }}>How to get a free key:</div>
+                  <div style={{ fontWeight: 'bold', fontSize: '0.9rem', marginBottom: '0.5rem' }}>How to get a working free key:</div>
                   <ol style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', lineHeight: '1.4' }}>
                     <li>Visit <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>Google AI Studio</a></li>
-                    <li>Sign in and click <strong>"Create API Key"</strong></li>
-                    <li>Copy the key and paste it below</li>
+                    <li>Click <strong>"Create API Key"</strong></li>
+                    <li><strong style={{ color: 'var(--primary)' }}>IMPORTANT:</strong> Ensure you select <strong>"Generative Language Client"</strong> as the project if prompted.</li>
+                    <li>Copy the key and paste it below.</li>
                   </ol>
+                  <div style={{ marginTop: '0.8rem', fontSize: '0.8rem', opacity: 0.8, fontStyle: 'italic' }}>
+                    Note: Newly created keys can take 2-5 minutes to "thaw" before they stop showing 'Quota Exceeded' errors.
+                  </div>
                 </div>
                 <div>
-                  <label className="stat-label">Gemini API Key</label>
-                  <input
-                    type="password"
-                    value={geminiApiKey}
-                    onChange={(e) => setGeminiApiKey(e.target.value)}
-                    className="input-field"
-                    placeholder="Paste your API key here (AIza...)"
-                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <input
+                      type="password"
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      className="input-field"
+                      placeholder="Paste your API key here (AIza...)"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn-primary"
+                      style={{ padding: '0 1rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                      onClick={async () => {
+                        if (!geminiApiKey) return alert("Please paste a key first");
+                        const btn = event.currentTarget;
+                        btn.disabled = true;
+                        btn.innerText = "Testing...";
+                        try {
+                          const genAI = new GoogleGenerativeAI(geminiApiKey.trim());
+                          const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                          await model.generateContent("Say 'Connection Successful'");
+                          alert("✅ Connection Successful! Your key is working.");
+                        } catch (e) {
+                          alert(`❌ Connection Failed: ${e.message}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`);
+                        } finally {
+                          btn.disabled = false;
+                          btn.innerText = "Test Key";
+                        }
+                      }}
+                    >
+                      Test Key
+                    </button>
+                  </div>
                   <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.5rem' }}>Your key is stored securely in your private profile and is never shared.</p>
                 </div>
               </div>

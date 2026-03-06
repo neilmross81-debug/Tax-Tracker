@@ -1834,7 +1834,7 @@ function App() {
               <button className="btn-icon" onClick={() => setShowBaseModifierModal(false)}><Trash2 size={24} style={{ transform: 'rotate(45deg)' }} /></button>
             </div>
 
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr', gap: '1rem', marginTop: 0 }}>
+            <div className="dashboard-grid" style={{ gap: '1rem', marginTop: 0 }}>
               <div>
                 <label className="stat-label">Description / Name</label>
                 <input className="input-field" value={baseModifierModalData.name} onChange={e => setBaseModifierModalData({ ...baseModifierModalData, name: e.target.value })} placeholder="e.g. Car Allowance" />
@@ -1926,7 +1926,7 @@ function App() {
               <button className="preset-button" onClick={() => setOtModalData({ ...otModalData, hours: 12, multiplier: 2.0 })}>12h @ 2.0x</button>
             </div>
 
-            <div className="dashboard-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: 0 }}>
+            <div className="dashboard-grid" style={{ gap: '1rem', marginTop: 0 }}>
               <div>
                 <label className="stat-label">Month Paid</label>
                 <select className="input-field" value={otModalData.monthIdx} onChange={e => setOtModalData({ ...otModalData, monthIdx: Number(e.target.value) })}>

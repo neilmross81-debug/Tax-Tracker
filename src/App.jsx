@@ -986,7 +986,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.3</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v22.4</span>
           </h1>
         </div>
 
@@ -1546,7 +1546,7 @@ function App() {
 
             <div className="overtime-list">
               {filteredOT.map(o => (
-                <div key={o.id} className="overtime-line glass-card clickable" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', marginBottom: '1rem', padding: '1rem' }} onClick={() => { setOtModalData({ id: o.id, date: o.date || '', hours: o.hours, multiplier: o.multiplier, reason: o.reason || '', monthIdx: o.monthIdx }); setShowOtModal(true); }}>
+                <div key={o.id} className="overtime-line glass-card clickable" style={{ borderLeft: o.claimed ? '4px solid var(--success)' : '4px solid var(--error)', marginBottom: '1rem', padding: '1rem' }} onClick={() => { setOtModalData({ id: o.id, date: o.date || '', hours: o.hours, multiplier: o.multiplier, reason: o.reason || '', monthIdx: o.monthIdx, originalMonthIdx: o.monthIdx }); setShowOtModal(true); }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                       <button className="btn-icon" onClick={(e) => { e.stopPropagation(); updateMonthItem(o.monthIdx, 'overtime', o.id, 'claimed', !o.claimed); }}>
@@ -1975,10 +1975,17 @@ function App() {
                 const newMonths = [...months];
                 if (otModalData.id) {
                   // Edit mode
-                  const currentMonthItems = newMonths[otModalData.monthIdx].overtime;
+                  const origIdx = otModalData.originalMonthIdx !== undefined ? otModalData.originalMonthIdx : otModalData.monthIdx;
+                  const currentMonthItems = newMonths[origIdx].overtime;
                   const itemIndex = currentMonthItems.findIndex(i => i.id === otModalData.id);
                   if (itemIndex > -1) {
-                    currentMonthItems[itemIndex] = { ...currentMonthItems[itemIndex], date: otModalData.date, reason: otModalData.reason, hours: Number(otModalData.hours) || 0, multiplier: otModalData.multiplier };
+                    const updatedItem = { ...currentMonthItems[itemIndex], date: otModalData.date, reason: otModalData.reason, hours: Number(otModalData.hours) || 0, multiplier: otModalData.multiplier, monthIdx: otModalData.monthIdx };
+                    if (origIdx !== otModalData.monthIdx) {
+                      newMonths[origIdx].overtime = currentMonthItems.filter(i => i.id !== otModalData.id);
+                      newMonths[otModalData.monthIdx].overtime = [updatedItem, ...newMonths[otModalData.monthIdx].overtime];
+                    } else {
+                      currentMonthItems[itemIndex] = updatedItem;
+                    }
                   }
                 } else {
                   // Add mode

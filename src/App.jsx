@@ -13,6 +13,13 @@ import AiAssistant from './AiAssistant';
 import { calculateSEProfit, calculateMileageAllowance, calculateSelfAssessment } from './logic/SelfAssessmentCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
+export const getCurrentTaxYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  // UK tax year starts April 6th
+  const isAfterTaxStart = (now.getMonth() > 3) || (now.getMonth() === 3 && now.getDate() >= 6);
+  return isAfterTaxStart ? `${year}/${(year + 1).toString().slice(-2)}` : `${year - 1}/${year.toString().slice(-2)}`;
+};
 
 const DonutChart = ({ data }) => {
   const total = data.reduce((s, i) => s + i.value, 0);
@@ -55,7 +62,7 @@ function App() {
   const [contractedHours, setContractedHours] = useState(37.5);
   const [pensionPercent, setPensionPercent] = useState(5);
   const [pensionType, setPensionType] = useState('standard'); // 'standard' | 'salary_sacrifice'
-  const [taxYear, setTaxYear] = useState('2025/26');
+  const [taxYear, setTaxYear] = useState(getCurrentTaxYear());
   const [studentLoanPlans, setStudentLoanPlans] = useState([]); // plan1, plan2, plan4, plan5, pgl
   const [childBenefitCount, setChildBenefitCount] = useState(0);
   const [holidaySupplementPercent, setHolidaySupplementPercent] = useState(8.3);
@@ -150,34 +157,42 @@ function App() {
 
           if (snap.exists()) {
             loadedProfiles = snap.data().profiles || {};
+            const savedYear = snap.data().activeTaxYear;
+            if (savedYear && loadedProfiles[savedYear]) {
+              setTaxYear(savedYear);
+              applyProfile(loadedProfiles[savedYear]);
+            } else {
+              const current = getCurrentTaxYear();
+              setTaxYear(current);
+              if (!loadedProfiles[current]) loadedProfiles[current] = DEFAULT_PROFILE(current);
+              applyProfile(loadedProfiles[current]);
+            }
           } else {
             // First login - migrate from localStorage if any
             const local = localStorage.getItem('taxTrackerDataV14_Profiles');
             if (local) {
               loadedProfiles = JSON.parse(local);
-              // Save migrated data to Firestore immediately
               await setDoc(userDocRef, { profiles: loadedProfiles }, { merge: true });
             }
+            const current = getCurrentTaxYear();
+            setTaxYear(current);
+            if (!loadedProfiles[current]) loadedProfiles[current] = DEFAULT_PROFILE(current);
+            applyProfile(loadedProfiles[current]);
           }
 
-          // Ensure both years have profile
-          if (!loadedProfiles['2025/26']) loadedProfiles['2025/26'] = DEFAULT_PROFILE('2025/26');
-          if (!loadedProfiles['2024/25']) loadedProfiles['2024/25'] = DEFAULT_PROFILE('2024/25');
-
           setProfiles(loadedProfiles);
-          setTaxYear('2025/26'); // Always start on the current tax year
-          applyProfile(loadedProfiles['2025/26']);
           setIsLoaded(true);
         } catch (e) {
           console.error("Load error:", e);
           setIsLoaded(true);
         }
       } else {
-        // Logged out - reset state
+        // Logged out - apply dynamic default
+        const current = getCurrentTaxYear();
+        setTaxYear(current);
+        applyProfile(DEFAULT_PROFILE(current));
         setIsLoaded(false);
         setProfiles({});
-        // Apply a default profile for anonymous use
-        applyProfile(DEFAULT_PROFILE('2025/26'));
       }
     });
 
@@ -323,9 +338,10 @@ function App() {
     setProfiles(updatedProfiles);
     // Save to Firestore
     const docRef = doc(db, 'users', currentUser.uid);
-    setDoc(docRef, { profiles: updatedProfiles }, { merge: true });
+    setDoc(docRef, { profiles: updatedProfiles, activeTaxYear: taxYear }, { merge: true });
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
+    localStorage.setItem('taxTracker_activeYear', taxYear);
   }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded]);
 
   // Switch Year Handler
@@ -999,7 +1015,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.0</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.1</span>
           </h1>
         </div>
 

@@ -321,6 +321,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         <>
             {/* Floating Toggle Button */}
             <button
+                id="tour-bot-trigger"
                 onClick={() => setIsOpen(o => !o)}
                 style={{
                     position: 'fixed', bottom: '6rem', right: '1.5rem',

@@ -157,16 +157,6 @@ function App() {
 
           if (snap.exists()) {
             loadedProfiles = snap.data().profiles || {};
-            const savedYear = snap.data().activeTaxYear;
-            if (savedYear && loadedProfiles[savedYear]) {
-              setTaxYear(savedYear);
-              applyProfile(loadedProfiles[savedYear]);
-            } else {
-              const current = getCurrentTaxYear();
-              setTaxYear(current);
-              if (!loadedProfiles[current]) loadedProfiles[current] = DEFAULT_PROFILE(current);
-              applyProfile(loadedProfiles[current]);
-            }
           } else {
             // First login - migrate from localStorage if any
             const local = localStorage.getItem('taxTrackerDataV14_Profiles');
@@ -174,11 +164,12 @@ function App() {
               loadedProfiles = JSON.parse(local);
               await setDoc(userDocRef, { profiles: loadedProfiles }, { merge: true });
             }
-            const current = getCurrentTaxYear();
-            setTaxYear(current);
-            if (!loadedProfiles[current]) loadedProfiles[current] = DEFAULT_PROFILE(current);
-            applyProfile(loadedProfiles[current]);
           }
+
+          const current = getCurrentTaxYear();
+          setTaxYear(current);
+          if (!loadedProfiles[current]) loadedProfiles[current] = DEFAULT_PROFILE(current);
+          applyProfile(loadedProfiles[current]);
 
           setProfiles(loadedProfiles);
           setIsLoaded(true);
@@ -209,33 +200,45 @@ function App() {
   // --- Tour Steps Definition ---
   const tourSteps = [
     {
-      title: "Welcome to Tax Tracker!",
-      content: "Let's take a 30-second tour to set up your profile for maximum accuracy.",
-      target: null, // Center screen
+      title: "1. Tax Year & Mode",
+      content: "Select your tax year and working status. We support PAYE, Self-Employed, or both combined!",
+      target: "#tour-tax-year",
       tab: 'config'
     },
     {
-      title: "1. Base Salary",
+      title: "2. Base Salary",
       content: "Enter your annual gross salary here. This is the foundation for all calculations.",
       target: "#tour-salary",
       tab: 'config'
     },
     {
-      title: "2. Pension (Salary Sacrifice)",
-      content: "If you have a Salary Sacrifice pension scheme, select it here to see your extra NI savings!",
+      title: "3. Pension (Salary Sacrifice)",
+      content: "Select your pension type. If you have Salary Sacrifice, you'll see your extra NI savings!",
       target: "#tour-pension-type",
       tab: 'config'
     },
     {
-      title: "3. Advanced Analytics",
-      content: "View your itemized breakdown and new timeline graphs here. It tracks your wealth, overtime trends, and tax savings!",
+      title: "4. Advanced Analytics",
+      content: "Track your wealth, tax traps, and trends. Hover over charts for itemized monthly data.",
       target: "#tour-analytics-trigger",
       tab: 'analytics'
     },
     {
-      title: "4. Overtime Tracker",
-      content: "Log your extra hours here. We'll track what's unclaimed so you never miss a penny.",
-      target: "#tour-ot-log",
+      title: "5. Self-Employed Tracker",
+      content: "If you're self-employed, log your invoices, expenses, and mileage here for the SA report.",
+      target: "#tour-se-nav",
+      tab: 'selfemployed'
+    },
+    {
+      title: "6. AI Tax Assistant",
+      content: "Have a tax question? Ask our AI assistant! It knows your data and HMRC rules.",
+      target: "#tour-bot-trigger",
+      tab: 'dashboard'
+    },
+    {
+      title: "7. Overtime Tracker",
+      content: "Log extra hours. We track what's unclaimed so you never miss a penny.",
+      target: "#tour-ot-nav",
       tab: 'overtime'
     }
   ];
@@ -1015,7 +1018,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.1</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.2</span>
           </h1>
         </div>
 
@@ -1657,18 +1660,19 @@ function App() {
                 <h3><Info size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Basic Details</h3>
                 <div className="dashboard-grid" style={{ marginTop: 0 }}>
                   <div><label className="stat-label">Tax Year</label>
-                    <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
+                    <select id="tour-tax-year" value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
                       {[...Array(17)].map((_, i) => {
                         const y1 = 2024 + i;
                         const y2 = String(y1 + 1).slice(-2);
                         const yrString = `${y1}/${y2}`;
-                        return <option key={yrString} value={yrString}>{yrString}</option>;
+                        const isCurrent = yrString === getCurrentTaxYear();
+                        return <option key={yrString} value={yrString}>{yrString}{isCurrent ? ' (Current)' : ''}</option>;
                       })}
                     </select>
                   </div>
                   <div>
                     <label className="stat-label">Work Mode</label>
-                    <select value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
+                    <select id="tour-work-mode" value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
                       <option value="paye" style={{ background: '#1e293b' }}>PAYE Only</option>
                       <option value="se" style={{ background: '#1e293b' }}>Self-Employed Only</option>
                       <option value="both" style={{ background: '#1e293b' }}>PAYE + Self-Employed</option>
@@ -1981,12 +1985,12 @@ function App() {
           <BarChart3 size={20} />
           <span>Stats</span>
         </div>
-        <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
+        <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} id="tour-ot-nav" onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
           <span>OT</span>
         </div>
         {workMode !== 'paye' && (
-          <div className={`nav-item ${activeTab === 'selfemployed' ? 'active' : ''}`} onClick={() => setActiveTab('selfemployed')}>
+          <div className={`nav-item ${activeTab === 'selfemployed' ? 'active' : ''}`} id="tour-se-nav" onClick={() => setActiveTab('selfemployed')}>
             <Briefcase size={20} />
             <span>SE</span>
           </div>

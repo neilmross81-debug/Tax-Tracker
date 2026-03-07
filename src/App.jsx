@@ -127,7 +127,6 @@ function App() {
     workMode: 'paye',
     seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false },
     hasCompletedTour: false,
-    hasCompletedTour: false,
     isPremium: true
   });
 

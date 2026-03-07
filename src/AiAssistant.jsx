@@ -240,18 +240,17 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 throw lastErr;
             };
 
-            // Updated fallback list including the "Gemini 2.5 Flash" model shown in user's dashboard
+            // Verbose fallback list to find the exact ID for the "Gemini 2.5 Flash" model
             const { responseText } = await tryRequest([
                 'gemini-2.5-flash',
+                'gemini-2.5-flash-001',
+                'gemini-2.5-flash-latest',
                 'gemini-2.0-flash',
                 'gemini-2.0-flash-exp',
-                'gemini-2.0-flash-lite-preview-02-05',
                 'gemini-1.5-flash',
                 'gemini-1.5-flash-latest',
-                'gemini-1.5-flash-8b',
                 'gemini-2.5-pro',
-                'gemini-1.5-pro',
-                'gemini-1.5-pro-latest'
+                'gemini-1.5-pro'
             ]);
 
             if (imageFile) {
@@ -280,14 +279,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
         } catch (err) {
             console.error('Gemini error:', err);
             const rawMessage = err.message || '';
-            let errMsg = `Error: ${rawMessage || 'Could not reach AI. Please try again.'}`;
+            let errMsg = `AI Error: ${rawMessage || 'Could not reach AI.'}`;
 
             if (rawMessage.includes('limit: 0')) {
-                errMsg = "Google is reporting 'Limit 0'. This is normal for brand-new keys! Your project is currently 'thawing' on Google's servers. Please wait 5-10 minutes and try again — it will start working automatically.";
+                errMsg = "Google is reporting 'Limit 0'. This is normal for brand-new keys! Your project is currently 'thawing'. Please wait 5-10 minutes.";
+            } else if (rawMessage.includes('404')) {
+                errMsg = `Model Not Found (404). I tried: gemini-2.5-flash, 2.0-flash, 1.5-flash. This usually means the model ID is slightly different for your region or project.`;
             } else if (rawMessage.includes('429')) {
-                errMsg = `Google API Quota Error: ${rawMessage}. (Usually means 15 requests/min limit hit).`;
+                errMsg = `Quota Exceeded (429). You've hit the rate limit (5-15 requests/min). Please wait 60 seconds.`;
             } else if (rawMessage.includes('API_KEY_INVALID')) {
-                errMsg = 'Your API Key appears to be invalid. Please check it in the Settings tab.';
+                errMsg = 'Invalid API Key. Please check it in Settings.';
             }
 
             setError(errMsg);

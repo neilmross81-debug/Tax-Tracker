@@ -160,7 +160,7 @@ const detectPositiveConfirmation = (text) => {
     return /^(yes|yeah|yep|ok|okay|sure|go ahead|do it|update|confirm|correct|absolutely|please|y)/.test(t);
 };
 
-export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings, onAiAction, selectedMonthIdx }) {
+export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings, onAiAction, selectedMonthIdx, isPremium, onRequestPremium }) {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -325,6 +325,17 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             // Handle Function Calls
                             const calls = response.functionCalls();
                             if (calls && calls.length > 0) {
+                                // GATING: Check if this is a "Premium" write action
+                                const hasWriteAction = calls.some(c => ['log_overtime', 'update_base_salary', 'update_tax_code'].includes(c.name));
+
+                                if (hasWriteAction && !isPremium) {
+                                    return {
+                                        responseText: "I've detected that you're trying to use **AI App Control** to update your tax records! 🚀\n\nThis is a **Pro** feature. I can update your overtime, salary, and tax codes directly for you once you've unlocked the full version. Would you like to see the upgrade options?",
+                                        success: true,
+                                        requiresPremium: true
+                                    };
+                                }
+
                                 let combinedResults = [];
                                 for (const call of calls) {
                                     const actionResult = onAiAction ? onAiAction(call.name, call.args) : { success: false, message: "Bridge not connected" };
@@ -388,7 +399,11 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
                 }
             } else {
-                setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+                setMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: responseText,
+                    showPremiumButton: !!(typeof res !== 'undefined' && res?.requiresPremium)
+                }]);
             }
         } catch (err) {
             console.error('Gemini error:', err);
@@ -592,6 +607,15 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                 }}>
                                     {msg.image && <img src={msg.image} alt="payslip" style={{ width: '100%', borderRadius: '0.5rem', marginBottom: '0.4rem', opacity: 0.85 }} />}
                                     {msg.role === 'user' && !msg.image ? msg.content : formatMessage(msg.content)}
+                                    {msg.showPremiumButton && (
+                                        <button
+                                            onClick={onRequestPremium}
+                                            className="btn-primary"
+                                            style={{ marginTop: '0.75rem', padding: '0.4rem 0.75rem', fontSize: '0.75rem', width: '100%' }}
+                                        >
+                                            View Pro Upgrade
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))}

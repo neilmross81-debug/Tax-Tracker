@@ -1023,6 +1023,7 @@ function App() {
             fontWeight: 800
           }}>
             TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v28.0</span>
+            {isPremium && <span style={{ marginLeft: '0.6rem', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', WebkitTextFillColor: 'white', fontSize: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: '2rem', verticalAlign: 'middle', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.4)' }}>Pro</span>}
           </h1>
         </div>
 
@@ -1065,48 +1066,7 @@ function App() {
         </button>
       </header>
 
-      {activeTab === 'dashboard' && !sandboxMode && (
-        <div className="glass-card" style={{
-          marginBottom: '2rem',
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '1.5rem',
-          padding: '1.25rem'
-        }}>
-          <div style={{
-            width: '3.5rem',
-            height: '3.5rem',
-            borderRadius: '1rem',
-            background: 'var(--primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 16px rgba(99, 102, 241, 0.2)',
-            flexShrink: 0
-          }}>
-            <Smartphone size={24} color="white" />
-          </div>
-          <div style={{ flex: 1 }}>
-            <h3 style={{ margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              TaxTracker Mobile is in Development! 📱
-            </h3>
-            <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7, lineHeight: 1.4 }}>
-              I've just successfully initialized the native iOS & Android projects. Get ready for a seamless App Store experience with native haptics, push notifications, and AI voice control.
-            </p>
-          </div>
-          <button
-            className="btn-primary"
-            style={{ padding: '0.6rem 1rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-            onClick={() => {
-              alert("🚀 Thanks for your interest! We'll notify you specifically when the v28.0 mobile beta is ready for download.");
-            }}
-          >
-            Pre-Register
-          </button>
-        </div>
-      )}
+
 
       {sandboxMode && (
         <div className="glass-card" style={{ border: '2px dashed var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.1)' }}>

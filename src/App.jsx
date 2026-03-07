@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot } from 'lucide-react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot, Smartphone } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
@@ -1018,7 +1018,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v27.0</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v27.1</span>
           </h1>
         </div>
 
@@ -1060,6 +1060,50 @@ function App() {
           <span>{sandboxMode ? 'Exit What-If Scenario Mode' : 'Enter What-If Sandbox'}</span>
         </button>
       </header>
+
+      {activeTab === 'dashboard' && !sandboxMode && (
+        <div className="glass-card" style={{
+          marginBottom: '2rem',
+          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15))',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1.5rem',
+          padding: '1.25rem'
+        }}>
+          <div style={{
+            width: '3.5rem',
+            height: '3.5rem',
+            borderRadius: '1rem',
+            background: 'var(--primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 16px rgba(99, 102, 241, 0.2)',
+            flexShrink: 0
+          }}>
+            <Smartphone size={24} color="white" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: '0 0 0.25rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              TaxTracker is coming to Mobile! 📱
+            </h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7, lineHeight: 1.4 }}>
+              Native iOS & Android apps are in development. Get ready for push notifications, haptic feedback, and a seamless native experience.
+            </p>
+          </div>
+          <button
+            className="btn-primary"
+            style={{ padding: '0.6rem 1rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              alert("🚀 Thanks for your interest! We'll notify you when the App Store beta launches.");
+              // In a real app, we'd log this interest to a DB or CRM
+            }}
+          >
+            Notify Me
+          </button>
+        </div>
+      )}
 
       {sandboxMode && (
         <div className="glass-card" style={{ border: '2px dashed var(--primary)', marginBottom: '2rem', background: 'rgba(99, 102, 241, 0.1)' }}>

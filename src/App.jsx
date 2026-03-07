@@ -1018,7 +1018,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.5</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v27.0</span>
           </h1>
         </div>
 
@@ -2003,6 +2003,48 @@ function App() {
         </div>
       </nav>
 
+      {/* AI Action Bridge - Central dispatcher for LLM triggered actions */}
+      {(() => {
+        window.handleAiAction = (action, params) => {
+          console.log("AI Action Triggered:", action, params);
+          switch (action) {
+            case 'switch_tab':
+              if (params.tab) setActiveTab(params.tab);
+              return { success: true, message: `Switched to ${params.tab}` };
+
+            case 'log_overtime': {
+              const { hours, multiplier, monthIdx, reason, date } = params;
+              const newMonths = [...months];
+              const targetMonth = monthIdx !== undefined ? monthIdx : selectedMonthIdx;
+              const newItem = {
+                id: Date.now(),
+                date: date || new Date().toISOString().split('T')[0],
+                reason: reason || 'AI Logged',
+                hours: Number(hours) || 0,
+                multiplier: Number(multiplier) || 1.5,
+                claimed: false,
+                monthIdx: targetMonth
+              };
+              newMonths[targetMonth].overtime = [newItem, ...newMonths[targetMonth].overtime];
+              setMonths(newMonths);
+              return { success: true, message: `Logged ${hours}h @ ${multiplier}x in ${MONTHS[targetMonth]}` };
+            }
+
+            case 'update_base_salary':
+              if (params.amount) setBaseSalary(Number(params.amount));
+              if (params.contractedHours) setContractedHours(Number(params.contractedHours));
+              return { success: true, message: `Updated salary to £${params.amount}` };
+
+            case 'update_tax_code':
+              if (params.code) setTaxCode(params.code.toUpperCase());
+              return { success: true, message: `Updated tax code to ${params.code}` };
+
+            default:
+              return { success: false, message: `Unknown action: ${action}` };
+          }
+        };
+      })()}
+
       {
         showBaseModifierModal && (
           <div className="modal-overlay" onClick={() => setShowBaseModifierModal(false)}>
@@ -2198,6 +2240,7 @@ function App() {
             return updated;
           });
         }}
+        onAiAction={(action, params) => window.handleAiAction(action, params)}
       />
     </div >
   );

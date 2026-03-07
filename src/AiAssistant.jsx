@@ -1,16 +1,70 @@
 import { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { X, Send, Bot, User, Sparkles, Paperclip, ImageIcon, Trash2 } from 'lucide-react';
+import { X, Send, Bot, User, Sparkles, Paperclip, ImageIcon, Trash2, Mic, MicOff, Play } from 'lucide-react';
 
 // GEMINI_API_KEY is now managed via props in the App settings.
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
 
 const SUGGESTED_QUESTIONS = [
+    "Log 4 hours overtime @ 1.5x for today",
+    "Switch to the stats page",
     "How can I reduce my tax bill?",
-    "Am I paying too much tax?",
-    "Should I increase my pension contributions?",
-    "What is the best way to claim my vehicle expenses?",
-    "What self-employed expenses can I claim?",
+    "Update my salary to £52,000",
+];
+
+const AI_TOOLS = [
+    {
+        functionDeclarations: [
+            {
+                name: "log_overtime",
+                description: "Logs an overtime entry for the user. Defaults to 1.5x multiplier if not specified.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        hours: { type: "NUMBER", description: "Number of hours worked" },
+                        multiplier: { type: "NUMBER", description: "Pay multiplier (e.g. 1.5 or 2.0)" },
+                        reason: { type: "STRING", description: "Optional description or reference" },
+                        monthIdx: { type: "NUMBER", description: "0-indexed month (0=April, 11=March). Use current if unknown." },
+                        date: { type: "STRING", description: "ISO date string (YYYY-MM-DD)" }
+                    },
+                    required: ["hours"]
+                }
+            },
+            {
+                name: "switch_tab",
+                description: "Navigates the app to a different tab.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        tab: { type: "STRING", enum: ["dashboard", "analytics", "overtime", "selfemployed", "config", "guide"], description: "The tab ID to switch to" }
+                    },
+                    required: ["tab"]
+                }
+            },
+            {
+                name: "update_base_salary",
+                description: "Updates the user's annual gross salary or contracted hours.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        amount: { type: "NUMBER", description: "Annual gross salary in GBP" },
+                        contractedHours: { type: "NUMBER", description: "Weekly contracted hours" }
+                    }
+                }
+            },
+            {
+                name: "update_tax_code",
+                description: "Updates the user's primary tax code.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {
+                        code: { type: "STRING", description: "UK Tax Code (e.g. 1257L)" }
+                    },
+                    required: ["code"]
+                }
+            }
+        ]
+    }
 ];
 
 const buildSystemPrompt = (taxData, workMode, taxCode, taxYear) => {
@@ -106,7 +160,7 @@ const detectPositiveConfirmation = (text) => {
     return /^(yes|yeah|yep|ok|okay|sure|go ahead|do it|update|confirm|correct|absolutely|please|y)/.test(t);
 };
 
-export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings }) {
+export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings, onAiAction, selectedMonthIdx }) {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -114,9 +168,46 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
     const [error, setError] = useState('');
     const [pendingPayslip, setPendingPayslip] = useState(null); // { data, awaitingMonth, monthIdx }
     const [previewImage, setPreviewImage] = useState(null);
+    const [isListening, setIsListening] = useState(false);
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
     const fileInputRef = useRef(null);
+    const recognitionRef = useRef(null);
+
+    // Initialize Speech Recognition
+    useEffect(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-GB';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                setInput(prev => (prev ? prev + ' ' : '') + transcript);
+                setIsListening(false);
+            };
+
+            recognition.onerror = () => setIsListening(false);
+            recognition.onend = () => setIsListening(false);
+            recognitionRef.current = recognition;
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (isListening) {
+            recognitionRef.current?.stop();
+        } else {
+            setError('');
+            try {
+                recognitionRef.current?.start();
+                setIsListening(true);
+            } catch (e) {
+                setError("Speech recognition failed to start.");
+            }
+        }
+    };
 
     useEffect(() => {
         if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -222,11 +313,34 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                                 .filter(m => !m.image)
                                 .map(m => ({
                                     role: m.role === 'user' ? 'user' : 'model',
-                                    parts: [{ text: m.content }]
+                                    parts: [{ text: String(m.content) }]
                                 }));
-                            const chat = model.startChat({ history });
-                            const result = await chat.sendMessage(userText);
-                            return { responseText: result.response.text(), success: true };
+                            const chat = model.startChat({
+                                history,
+                                tools: AI_TOOLS,
+                            });
+                            let result = await chat.sendMessage(userText);
+                            let response = result.response;
+
+                            // Handle Function Calls
+                            const calls = response.functionCalls();
+                            if (calls && calls.length > 0) {
+                                let combinedResults = [];
+                                for (const call of calls) {
+                                    const actionResult = onAiAction ? onAiAction(call.name, call.args) : { success: false, message: "Bridge not connected" };
+                                    combinedResults.push({
+                                        functionResponse: {
+                                            name: call.name,
+                                            response: actionResult
+                                        }
+                                    });
+                                }
+                                // Feed results back to model to get a natural language confirmation
+                                result = await chat.sendMessage(combinedResults);
+                                response = result.response;
+                            }
+
+                            return { responseText: response.text(), success: true };
                         }
                     } catch (e) {
                         const m = e.message || '';
@@ -509,17 +623,34 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                     {/* Input */}
                     <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--glass-border)', display: 'flex', gap: '0.5rem', flexShrink: 0, alignItems: 'flex-end', background: 'var(--ai-panel-bg)' }}>
                         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
-                        <button
-                            onClick={() => fileInputRef.current?.click()}
-                            title="Upload payslip image"
-                            style={{
-                                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
-                                borderRadius: '0.75rem', padding: '0.6rem 0.65rem', cursor: 'pointer', flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}
-                        >
-                            <Paperclip size={16} color="var(--primary)" />
-                        </button>
+
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                title="Upload payslip image"
+                                style={{
+                                    background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                                    borderRadius: '0.75rem', padding: '0.6rem 0.65rem', cursor: 'pointer', flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                            >
+                                <Paperclip size={16} color="var(--primary)" />
+                            </button>
+
+                            <button
+                                onClick={toggleListening}
+                                title={isListening ? "Stop Listening" : "Voice Dictation"}
+                                style={{
+                                    background: isListening ? 'rgba(239,68,68,0.25)' : 'rgba(99,102,241,0.15)',
+                                    border: `1px solid ${isListening ? '#ef4444' : 'rgba(99,102,241,0.3)'}`,
+                                    borderRadius: '0.75rem', padding: '0.6rem 0.65rem', cursor: 'pointer', flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                }}
+                            >
+                                {isListening ? <MicOff size={16} color="#ef4444" className="pulse-error" /> : <Mic size={16} color="var(--primary)" />}
+                            </button>
+                        </div>
+
                         <textarea
                             ref={inputRef}
                             value={input}

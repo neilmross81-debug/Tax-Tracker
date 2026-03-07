@@ -999,7 +999,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.4</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.0</span>
           </h1>
         </div>
 
@@ -1414,10 +1414,10 @@ function App() {
                         className="input-field"
                       />
                       <select value={d.type} onChange={(e) => updateMonthItem(selectedMonthIdx, 'deductions', d.id, 'type', e.target.value)} className="input-field">
-                        <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Gross Sacrifice</option>
-                        <option value="net_sacrifice" style={{ background: '#1e293b' }}>Net Sacrifice</option>
-                        <option value="tax_free" style={{ background: '#1e293b' }}>Expense</option>
-                        <option value="income" style={{ background: '#1e293b' }}>Income</option>
+                        <option value="salary_sacrifice">Gross Sacrifice</option>
+                        <option value="net_sacrifice">Net Sacrifice</option>
+                        <option value="tax_free">Expense</option>
+                        <option value="income">Income</option>
                       </select>
                       <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeMonthItem(selectedMonthIdx, 'deductions', d.id)}><Trash2 size={16} /></button>
                     </div>
@@ -1794,8 +1794,7 @@ function App() {
                       <div style={{ fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.4rem' }}>THE FIX:</div>
                       <ol style={{ fontSize: '0.75rem', lineHeight: '1.4', paddingLeft: '1.25rem', margin: 0 }}>
                         <li style={{ marginBottom: '0.4rem' }}>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>AI Studio</a></li>
-                        <li style={{ marginBottom: '0.4rem' }}>Click <strong>"Create API Key"</strong></li>
-                        <li style={{ marginBottom: '0.4rem' }}>Select <strong>"Create API Key in new project"</strong> (the blue button at the bottom of the popup).</li>
+                        <li style={{ marginBottom: '0.4rem' }}>Select <strong>"Create API Key in new project"</strong> (the blue button at the bottom of the popup). **This is critical** (the "Default" project is often broken/restricted).</li>
                         <li>Copy the NEW key from that fresh project and paste it here.</li>
                       </ol>
                     </div>

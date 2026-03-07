@@ -9,8 +9,8 @@ const Section = ({ icon, title, badge, children }) => {
                 onClick={() => setOpen(!open)}
                 style={{
                     width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '1rem', background: open ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.02)',
-                    border: 'none', color: 'white', cursor: 'pointer', textAlign: 'left', gap: '0.75rem'
+                    padding: '1rem', background: open ? 'var(--primary-light)' : 'rgba(255,255,255,0.02)',
+                    border: 'none', color: 'var(--text-main)', cursor: 'pointer', textAlign: 'left', gap: '0.75rem'
                 }}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1 }}>
@@ -23,7 +23,7 @@ const Section = ({ icon, title, badge, children }) => {
                 {open ? <ChevronDown size={16} opacity={0.5} /> : <ChevronRight size={16} opacity={0.5} />}
             </button>
             {open && (
-                <div style={{ padding: '1rem 1.1rem 1.1rem', fontSize: '0.87rem', lineHeight: 1.65, color: 'rgba(255,255,255,0.75)', borderTop: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.1)' }}>
+                <div style={{ padding: '1rem 1.1rem 1.1rem', fontSize: '0.87rem', lineHeight: 1.65, color: 'var(--text-main)', opacity: 0.9, borderTop: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.05)' }}>
                     {children}
                 </div>
             )}
@@ -41,9 +41,9 @@ const Table = ({ rows }) => (
     <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.75rem', fontSize: '0.83rem' }}>
         <tbody>
             {rows.map(([a, b], i) => (
-                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.4rem 0.5rem', opacity: 0.7, whiteSpace: 'nowrap' }}>{a}</td>
-                    <td style={{ padding: '0.4rem 0.5rem', fontWeight: 500 }}>{b}</td>
+                <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                    <td style={{ padding: '0.4rem 0.5rem', opacity: 0.6, whiteSpace: 'nowrap', color: 'var(--text-main)' }}>{a}</td>
+                    <td style={{ padding: '0.4rem 0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>{b}</td>
                 </tr>
             ))}
         </tbody>
@@ -51,7 +51,7 @@ const Table = ({ rows }) => (
 );
 
 const Tip = ({ children }) => (
-    <div style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '0.5rem', padding: '0.6rem 0.75rem', marginTop: '0.75rem', fontSize: '0.82rem' }}>
+    <div style={{ background: 'var(--primary-light)', border: '1px solid var(--primary)', borderRadius: '0.5rem', padding: '0.6rem 0.75rem', marginTop: '0.75rem', fontSize: '0.82rem', color: 'var(--text-main)' }}>
         💡 {children}
     </div>
 );

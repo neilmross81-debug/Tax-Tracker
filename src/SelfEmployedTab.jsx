@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Download, Printer, Car, Receipt, TrendingUp, FileText, AlertCircle, CheckCircle, Clock, Briefcase } from 'lucide-react';
+import { Plus, Trash2, Download, Printer, Car, Receipt, TrendingUp, FileText, AlertCircle, CheckCircle, Clock, Briefcase, ShieldCheck } from 'lucide-react';
 import {
     calculateClass2NI,
     calculateClass4NI,
@@ -154,7 +154,7 @@ export default function SelfEmployedTab({
       <table>
         <tr><th>Month</th><th>Client</th><th>Amount</th><th>Status</th></tr>
         ${months.flatMap((m, i) => (m.invoices || []).map(inv => `
-          <tr><td>${MONTHS[i]}</td><td>${inv.client || '—'}</td><td>£${fmt(inv.amount)}</td><td>${inv.paid ? 'Paid' : 'Unpaid'}</td></tr>
+          <tr><td>${MONTHS[i]}</td><td>${inv.invoiceNumber ? `[#${inv.invoiceNumber}] ` : ''}${inv.client || '—'}</td><td>£${fmt(inv.amount)}</td><td>${inv.paid ? 'Paid' : 'Unpaid'}</td></tr>
         `)).join('') || '<tr><td colspan="4">No invoices recorded</td></tr>'}
         <tr class="total"><td colspan="2"><strong>Total Paid Income</strong></td><td><strong>£${fmt(totals.totalIncome)}</strong></td><td></td></tr>
       </table>
@@ -304,7 +304,7 @@ export default function SelfEmployedTab({
                         style={{ width: '100%', fontSize: '1rem' }}
                     >
                         {MONTHS.map((m, i) => (
-                            <option key={m} value={i} style={{ background: '#1e293b' }}>{m}</option>
+                            <option key={m} value={i}>{m}</option>
                         ))}
                     </select>
                 </div>
@@ -315,7 +315,7 @@ export default function SelfEmployedTab({
                 <div className="glass-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                         <h3 style={{ margin: 0 }}>Invoices — {MONTHS[selectedMonth]}</h3>
-                        <button className="btn-add" onClick={() => addItem(selectedMonth, 'invoices', { client: '', amount: '', date: new Date().toISOString().split('T')[0], paid: false })}>
+                        <button className="btn-add" onClick={() => addItem(selectedMonth, 'invoices', { invoiceNumber: '', client: '', amount: '', date: new Date().toISOString().split('T')[0], paid: false })}>
                             <Plus size={16} />
                         </button>
                     </div>
@@ -324,9 +324,10 @@ export default function SelfEmployedTab({
                     )}
                     {(months[selectedMonth].invoices || []).map(inv => (
                         <div key={inv.id} className="income-line" style={{ marginBottom: '0.75rem', padding: '0.75rem', background: 'rgba(0,0,0,0.1)', borderRadius: '0.5rem', borderLeft: `3px solid ${inv.paid ? 'var(--success)' : '#fbbf24'}` }}>
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', width: '100%', alignItems: 'center' }}>
+                                <input placeholder="Inv #" value={inv.invoiceNumber || ''} onChange={e => updateItem(selectedMonth, 'invoices', inv.id, 'invoiceNumber', e.target.value)} className="input-field" style={{ flex: '0 1 60px', minWidth: '50px' }} title="Invoice Number" />
                                 <input placeholder="Client name" value={inv.client} onChange={e => updateItem(selectedMonth, 'invoices', inv.id, 'client', e.target.value)} className="input-field" style={{ flex: '2 1 120px' }} />
-                                <input type="number" placeholder="Amount (£)" value={inv.amount} onChange={e => updateItem(selectedMonth, 'invoices', inv.id, 'amount', e.target.value)} className="input-field" style={{ flex: '1 1 80px' }} />
+                                <input type="number" placeholder="Amt" value={inv.amount} onChange={e => updateItem(selectedMonth, 'invoices', inv.id, 'amount', e.target.value)} className="input-field" style={{ flex: '1 1 70px' }} />
                                 <input type="date" value={inv.date} onChange={e => updateItem(selectedMonth, 'invoices', inv.id, 'date', e.target.value)} className="input-field" style={{ flex: '1 1 100px' }} />
                                 <button
                                     onClick={() => updateItem(selectedMonth, 'invoices', inv.id, 'paid', !inv.paid)}
@@ -366,7 +367,7 @@ export default function SelfEmployedTab({
                         <div key={exp.id} className="income-line" style={{ marginBottom: '0.75rem' }}>
                             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                 <select value={exp.category} onChange={e => updateItem(selectedMonth, 'expenses', exp.id, 'category', e.target.value)} className="input-field" style={{ flex: '2 1 130px' }}>
-                                    {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value} style={{ background: '#1e293b' }}>{c.label}</option>)}
+                                    {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                                 </select>
                                 <input placeholder="Description" value={exp.description} onChange={e => updateItem(selectedMonth, 'expenses', exp.id, 'description', e.target.value)} className="input-field" style={{ flex: '2 1 120px' }} />
                                 <input type="number" placeholder="£ Amount" value={exp.amount} onChange={e => updateItem(selectedMonth, 'expenses', exp.id, 'amount', e.target.value)} className="input-field" style={{ flex: '1 1 80px' }} />
@@ -411,7 +412,7 @@ export default function SelfEmployedTab({
                                 <input placeholder="Asset Name" value={asset.name} onChange={e => updateAsset(asset.id, 'name', e.target.value)} className="input-field" style={{ flex: '2 1 150px' }} />
                                 <input type="number" placeholder="Cost (£)" value={asset.cost} onChange={e => updateAsset(asset.id, 'cost', e.target.value)} className="input-field" style={{ flex: '1 1 100px' }} />
                                 <select value={asset.type} onChange={e => updateAsset(asset.id, 'type', e.target.value)} className="input-field" style={{ flex: '2 1 200px' }}>
-                                    {ASSET_TYPES.map(t => <option key={t.value} value={t.value} style={{ background: '#1e293b' }}>{t.label}</option>)}
+                                    {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                                 </select>
                                 <button className="btn-icon" style={{ color: 'var(--error)' }} onClick={() => removeAsset(asset.id)}><Trash2 size={16} /></button>
                             </div>

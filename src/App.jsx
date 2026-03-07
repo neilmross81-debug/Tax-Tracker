@@ -1018,7 +1018,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.4</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v26.5</span>
           </h1>
         </div>
 
@@ -1692,7 +1692,7 @@ function App() {
                     <label className="stat-label">Pension Type (Salary Sacrifice?)</label>
                     <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
                       <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
-                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (e.g. Mercer)</option>
+                      <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Pension SS)</option>
                     </select>
                   </div>
                   <div><label className="stat-label">OT Holiday Supp. %</label><input type="number" step="0.1" value={holidaySupplementPercent} onChange={(e) => handleNumericInput(e.target.value, setHolidaySupplementPercent)} className="input-field" /></div>
@@ -1769,15 +1769,11 @@ function App() {
                             throw lastE;
                           };
                           await tryTest([
-                            'gemini-1.5-flash',
-                            'gemini-1.5-flash-latest',
+                            'gemini-2.5-flash',
+                            'gemini-2.5-flash-001',
+                            'gemini-2.5-flash-latest',
                             'gemini-2.0-flash',
-                            'gemini-1.5-flash-8b',
-                            'gemini-1.5-flash-8b-latest',
-                            'gemini-2.0-flash-lite-preview-02-05',
-                            'gemini-2.0-flash-exp',
-                            'gemini-1.5-pro',
-                            'gemini-1.5-pro-latest'
+                            'gemini-1.5-flash'
                           ]);
                           alert("✅ Connection Successful! Your key is working.");
                         } catch (err) {

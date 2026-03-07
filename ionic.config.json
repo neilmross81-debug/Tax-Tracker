@@ -1,0 +1,7 @@
+{
+    "name": "Tax-Tracker",
+    "integrations": {
+        "capacitor": {}
+    },
+    "type": "react"
+}

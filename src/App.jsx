@@ -100,7 +100,7 @@ function App() {
   const [baseModifierModalData, setBaseModifierModalData] = useState({ id: null, type: 'enhancement', name: '', amount: '', frequency: 'monthly', sacrificeType: 'salary_sacrifice' });
   // null or index
   const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
-  const [isPremium, setIsPremium] = useState(false);
+  const [isPremium, setIsPremium] = useState(true);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   // --- Theme State ---
@@ -127,7 +127,8 @@ function App() {
     workMode: 'paye',
     seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false },
     hasCompletedTour: false,
-    isPremium: false
+    hasCompletedTour: false,
+    isPremium: true
   });
 
   const applyProfile = (prof) => {
@@ -146,7 +147,7 @@ function App() {
     setWorkMode(prof.workMode || 'paye');
     setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false });
     setHasCompletedTour(prof.hasCompletedTour !== undefined ? prof.hasCompletedTour : true);
-    setIsPremium(prof.isPremium || false);
+    setIsPremium(true); // Always Pro for Paid App Launch
   };
 
   // Auth state listener - fires once on mount
@@ -1663,27 +1664,7 @@ function App() {
                 </button>
               </div>
 
-              <div className="settings-box" style={{ background: isPremium ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))' : 'rgba(255,255,255,0.03)', border: isPremium ? '1px solid rgba(99, 102, 241, 0.3)' : '1px solid rgba(255,255,255,0.05)' }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <ShieldCheck size={18} color={isPremium ? 'var(--primary)' : 'var(--text-muted)'} />
-                  Subscription Status: {isPremium ? 'TaxTracker Pro' : 'Standard Version'}
-                </h3>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
-                  <p style={{ margin: 0, fontSize: '0.85rem', opacity: 0.7 }}>
-                    {isPremium ? 'You have full access to AI App Control, SA Reports, and Native Mobile features.' : 'Unlock AI App Control and professional reports with a one-time upgrade.'}
-                  </p>
-                  <button
-                    className={isPremium ? "btn-secondary" : "btn-primary"}
-                    style={{ padding: '0.5rem 1rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                    onClick={() => {
-                      if (isPremium) setIsPremium(false); // Quick toggle for testing
-                      else setShowPremiumModal(true);
-                    }}
-                  >
-                    {isPremium ? 'Downgrade (Debug)' : 'Upgrade to Pro'}
-                  </button>
-                </div>
-              </div>
+              {/* Subscription Status Removed for Paid App Launch */}
 
               <div className="settings-box">
                 <h3><Info size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Basic Details</h3>

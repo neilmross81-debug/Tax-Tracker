@@ -240,15 +240,16 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 throw lastErr;
             };
 
-            // Even more robust fallback list for new keys
+            // Updated fallback list including the "Gemini 2.5 Flash" model shown in user's dashboard
             const { responseText } = await tryRequest([
+                'gemini-2.5-flash',
+                'gemini-2.0-flash',
+                'gemini-2.0-flash-exp',
+                'gemini-2.0-flash-lite-preview-02-05',
                 'gemini-1.5-flash',
                 'gemini-1.5-flash-latest',
-                'gemini-2.0-flash',
                 'gemini-1.5-flash-8b',
-                'gemini-1.5-flash-8b-latest',
-                'gemini-2.0-flash-lite-preview-02-05',
-                'gemini-2.0-flash-exp',
+                'gemini-2.5-pro',
                 'gemini-1.5-pro',
                 'gemini-1.5-pro-latest'
             ]);

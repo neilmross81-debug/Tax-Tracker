@@ -96,6 +96,7 @@ function App() {
 
   // --- Theme State ---
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [showAiTroubleshoot, setShowAiTroubleshoot] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('light-mode', theme === 'light');
@@ -998,7 +999,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.3</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.4</span>
           </h1>
         </div>
 
@@ -1776,6 +1777,29 @@ function App() {
                     </button>
                   </div>
                   <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.5rem' }}>Your key is stored securely in your private profile and is never shared.</p>
+
+                  <button
+                    onClick={() => setShowAiTroubleshoot(!showAiTroubleshoot)}
+                    style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline', padding: 0, marginTop: '1rem', display: 'block' }}
+                  >
+                    {showAiTroubleshoot ? 'Hide Troubleshooting' : 'Still getting errors? Click here for the fix'}
+                  </button>
+
+                  {showAiTroubleshoot && (
+                    <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '0.5rem' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#f87171', marginBottom: '0.5rem' }}>🔴 Quota "Limit 0" Problem</div>
+                      <p style={{ fontSize: '0.8rem', lineHeight: '1.4', margin: '0 0 0.8rem 0' }}>
+                        Your dashboard shows **"Default Gemini Project"**. Google often restricts this default project to 0 quota for new users.
+                      </p>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '0.4rem' }}>THE FIX:</div>
+                      <ol style={{ fontSize: '0.75rem', lineHeight: '1.4', paddingLeft: '1.25rem', margin: 0 }}>
+                        <li style={{ marginBottom: '0.4rem' }}>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>AI Studio</a></li>
+                        <li style={{ marginBottom: '0.4rem' }}>Click <strong>"Create API Key"</strong></li>
+                        <li style={{ marginBottom: '0.4rem' }}>Select <strong>"Create API Key in new project"</strong> (the blue button at the bottom of the popup).</li>
+                        <li>Copy the NEW key from that fresh project and paste it here.</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </div>
 

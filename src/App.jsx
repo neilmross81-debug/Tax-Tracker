@@ -998,7 +998,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.2</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v25.3</span>
           </h1>
         </div>
 
@@ -1748,20 +1748,23 @@ function App() {
                             throw lastE;
                           };
                           await tryTest([
-                            'gemini-1.5-flash-latest',
                             'gemini-1.5-flash',
-                            'gemini-1.5-flash-8b-latest',
-                            'gemini-1.5-flash-8b',
+                            'gemini-1.5-flash-latest',
                             'gemini-2.0-flash',
-                            'gemini-1.5-pro-latest',
-                            'gemini-1.5-pro'
+                            'gemini-1.5-flash-8b',
+                            'gemini-1.5-flash-8b-latest',
+                            'gemini-2.0-flash-lite-preview-02-05',
+                            'gemini-2.0-flash-exp',
+                            'gemini-1.5-pro',
+                            'gemini-1.5-pro-latest'
                           ]);
                           alert("✅ Connection Successful! Your key is working.");
                         } catch (err) {
                           const msg = err.message || '';
-                          const help = msg.includes('limit: 0')
-                            ? "❌ Connection Failed: Google is reporting 'Limit 0'. This means your key is brand new. Please wait 2-5 minutes for it to activate and test again."
-                            : `❌ Connection Failed: ${msg}\n\nTip: If it says 'Quota Exceeded', the key might still be activating. Wait 2 minutes and test again.`;
+                          const isLimit0 = msg.includes('limit: 0');
+                          const help = isLimit0
+                            ? "❌ Connection Failed: Google is still reporting 'Limit 0'.\n\nSince you've waited over 24 hours, this means the 'Default Gemini Project' is stuck. \n\nACTION: Go back to AI Studio, click 'Create API Key', and ensure you create it in a NEW project (not the default one). Then copy the new key here."
+                            : `❌ Connection Failed: ${msg}\n\nTip: If it says 'Quota Exceeded', try testing again in 2 minutes.`;
                           alert(help);
                         } finally {
                           btn.disabled = false;

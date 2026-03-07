@@ -229,10 +229,12 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             return { responseText: result.response.text(), success: true };
                         }
                     } catch (e) {
+                        const m = e.message || '';
                         console.warn(`Model ${modelName} failed:`, e);
-                        lastErr = e;
-                        // If it's a 404, we definitely want to try the next model
-                        // If it's a 429, we might want to try a different model tier if available
+                        // Prioritize "Limit 0" error as it's most descriptive for billing/setup issues
+                        if (!lastErr || m.includes('limit: 0') || m.includes('PERMISSION_DENIED')) {
+                            lastErr = e;
+                        }
                     }
                 }
                 throw lastErr;
@@ -240,13 +242,15 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
 
             // Even more robust fallback list for new keys
             const { responseText } = await tryRequest([
-                'gemini-1.5-flash-latest',
                 'gemini-1.5-flash',
-                'gemini-1.5-flash-8b-latest',
-                'gemini-1.5-flash-8b',
+                'gemini-1.5-flash-latest',
                 'gemini-2.0-flash',
-                'gemini-1.5-pro-latest',
-                'gemini-1.5-pro'
+                'gemini-1.5-flash-8b',
+                'gemini-1.5-flash-8b-latest',
+                'gemini-2.0-flash-lite-preview-02-05',
+                'gemini-2.0-flash-exp',
+                'gemini-1.5-pro',
+                'gemini-1.5-pro-latest'
             ]);
 
             if (imageFile) {

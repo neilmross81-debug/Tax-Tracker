@@ -22,6 +22,12 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Tax Tracker needs access to your camera to scan paper payslips and receipts.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tax Tracker needs access to your microphone to allow you to log overtime using your voice.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Tax Tracker needs access to your photo library so you can select photos of your receipts and payslips.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

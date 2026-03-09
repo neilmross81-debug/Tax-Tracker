@@ -3,6 +3,7 @@ import { auth } from './firebase';
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
+    signInAnonymously,
 } from 'firebase/auth';
 
 export default function AuthModal() {
@@ -17,11 +18,14 @@ export default function AuthModal() {
         e.preventDefault();
         setError('');
 
-        if (mode === 'signup' && password !== confirm) {
+        const targetEmail = email.trim().toLowerCase();
+        const targetPass = password.trim();
+
+        if (mode === 'signup' && targetPass !== confirm) {
             setError('Passwords do not match.');
             return;
         }
-        if (password.length < 6) {
+        if (targetPass.length < 6) {
             setError('Password must be at least 6 characters.');
             return;
         }
@@ -29,24 +33,23 @@ export default function AuthModal() {
         setLoading(true);
         try {
             if (mode === 'signup') {
-                await createUserWithEmailAndPassword(auth, email, password);
+                await createUserWithEmailAndPassword(auth, targetEmail, targetPass);
             } else {
                 // Special bypass for Apple Reviewer
-                if (email.toLowerCase() === 'tester@test.com' && password === 'password') {
+                if (targetEmail === 'tester@test.com' && targetPass === 'password') {
                     try {
-                        await signInWithEmailAndPassword(auth, email, password);
+                        await signInWithEmailAndPassword(auth, targetEmail, targetPass);
                     } catch (e) {
                         // If account doesn't exist, create it on the fly
                         try {
-                            await createUserWithEmailAndPassword(auth, email, password);
+                            await createUserWithEmailAndPassword(auth, targetEmail, targetPass);
                         } catch (e2) {
                             // Absolute fallback to anonymous if creation fails
-                            const { signInAnonymously } = await import('firebase/auth');
                             await signInAnonymously(auth);
                         }
                     }
                 } else {
-                    await signInWithEmailAndPassword(auth, email, password);
+                    await signInWithEmailAndPassword(auth, targetEmail, targetPass);
                 }
             }
         } catch (err) {

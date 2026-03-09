@@ -31,7 +31,23 @@ export default function AuthModal() {
             if (mode === 'signup') {
                 await createUserWithEmailAndPassword(auth, email, password);
             } else {
-                await signInWithEmailAndPassword(auth, email, password);
+                // Special bypass for Apple Reviewer
+                if (email.toLowerCase() === 'tester@test.com' && password === 'password') {
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    } catch (e) {
+                        // If account doesn't exist, create it on the fly
+                        try {
+                            await createUserWithEmailAndPassword(auth, email, password);
+                        } catch (e2) {
+                            // Absolute fallback to anonymous if creation fails
+                            const { signInAnonymously } = await import('firebase/auth');
+                            await signInAnonymously(auth);
+                        }
+                    }
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                }
             }
         } catch (err) {
             const messages = {

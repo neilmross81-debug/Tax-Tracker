@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "taxtracker-c63c8"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

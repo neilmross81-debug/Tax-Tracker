@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot, Smartphone } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot, Smartphone, Car, Gauge } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
@@ -23,21 +23,22 @@ export const getCurrentTaxYear = () => {
 
 const DonutChart = ({ data }) => {
   const total = data.reduce((s, i) => s + i.value, 0);
-  let cumulativePercent = 0;
 
   const getCoordinatesForPercent = (percent) => {
     const x = Math.cos(2 * Math.PI * percent);
     const y = Math.sin(2 * Math.PI * percent);
-    return [x, y];
-  };
 
   return (
     <svg viewBox="-1 -1 2 2" style={{ transform: 'rotate(-90deg)', width: '100%', maxWidth: '200px', margin: '0 auto', display: 'block' }}>
       {data.map((slice, i) => {
-        const [startX, startY] = getCoordinatesForPercent(cumulativePercent);
-        cumulativePercent += slice.value / total;
-        const [endX, endY] = getCoordinatesForPercent(cumulativePercent);
-        const largeArcFlag = slice.value / total > 0.5 ? 1 : 0;
+        const slicePercent = slice.value / total;
+        // Pre-calculate cumulative percent for this slice without mutation
+        const startPercent = data.slice(0, i).reduce((acc, s) => acc + (s.value / total), 0);
+        const endPercent = startPercent + slicePercent;
+        
+        const [startX, startY] = getCoordinatesForPercent(startPercent);
+        const [endX, endY] = getCoordinatesForPercent(endPercent);
+        const largeArcFlag = slicePercent > 0.5 ? 1 : 0;
         const pathData = [
           `M ${startX} ${startY}`,
           `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
@@ -102,6 +103,8 @@ function App() {
   const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
   const [isPremium, setIsPremium] = useState(true);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [leaseConfig, setLeaseConfig] = useState({ startDate: '', termMonths: 36, totalAllowedMiles: 30000 });
+  const [mileageLogs, setMileageLogs] = useState([]);
 
   // --- Theme State ---
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
@@ -116,8 +119,9 @@ function App() {
   const [currentUser, setCurrentUser] = useState(undefined); // undefined = loading, null = logged out
   const [profiles, setProfiles] = useState({});
   const [isLoaded, setIsLoaded] = useState(false);
+  const isBootingRef = useRef(false);
 
-  const DEFAULT_PROFILE = (year) => ({
+  const DEFAULT_PROFILE = () => ({
     taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5,
     pensionPercent: 5, pensionType: 'standard', holidaySupplementPercent: 8.3,
     studentLoanPlans: [], childBenefitCount: 0,
@@ -127,7 +131,9 @@ function App() {
     workMode: 'paye',
     seData: { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false },
     hasCompletedTour: false,
-    isPremium: true
+    isPremium: true,
+    leaseConfig: { startDate: '', termMonths: 36, totalAllowedMiles: 30000 },
+    mileageLogs: []
   });
 
   const applyProfile = (prof) => {
@@ -147,22 +153,42 @@ function App() {
     setSEData(prof.seData || { months: Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] })), assets: [], vatRegistered: false, useTradingAllowance: false });
     setHasCompletedTour(prof.hasCompletedTour !== undefined ? prof.hasCompletedTour : true);
     setIsPremium(true); // Always Pro for Paid App Launch
+    setLeaseConfig(prof.leaseConfig || { startDate: '', termMonths: 36, totalAllowedMiles: 30000 });
+    setMileageLogs(prof.mileageLogs || []);
   };
 
   // Auth state listener - fires once on mount
   useEffect(() => {
+    console.log("[BOOT: AUTH_START] Listening for auth changes...");
     const unsub = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
+      console.log(`[BOOT: AUTH_EVENT] User: ${user ? user.uid : 'Logged Out'}`);
+      
+      if (isBootingRef.current) {
+        console.log("[BOOT: SKIP] Already booting, ignoring secondary event.");
+        return;
+      }
+      isBootingRef.current = true;
+
+      // 5-Second Rescue Timeout
+      const rescueTimer = setTimeout(() => {
+        if (!isLoaded) {
+          console.warn("[BOOT: RESCUE] Data fetch timed out after 5s. Proceeding with local/defaults.");
+          setIsLoaded(true);
+        }
+      }, 5000);
+
       if (user) {
         try {
+          console.log("[BOOT: DATA_START] Fetching Firestore document...");
           const userDocRef = doc(db, 'users', user.uid);
           const snap = await getDoc(userDocRef);
           let loadedProfiles = {};
 
           if (snap.exists()) {
+            console.log("[BOOT: DATA_SUCCESS] Profile found in cloud.");
             loadedProfiles = snap.data().profiles || {};
           } else {
-            // First login - migrate from localStorage if any
+            console.log("[BOOT: DATA_EMPTY] No cloud profile. Checking migration...");
             const local = localStorage.getItem('taxTrackerDataV14_Profiles');
             if (local) {
               loadedProfiles = JSON.parse(local);
@@ -176,18 +202,27 @@ function App() {
           applyProfile(loadedProfiles[current]);
 
           setProfiles(loadedProfiles);
+          setCurrentUser(user);
           setIsLoaded(true);
+          console.log("[BOOT: READY] User logged in and data applied.");
         } catch (e) {
-          console.error("Load error:", e);
+          console.error("[BOOT: ERROR]", e);
+          setCurrentUser(user);
           setIsLoaded(true);
+        } finally {
+          clearTimeout(rescueTimer);
+          isBootingRef.current = false;
         }
       } else {
-        // Logged out - apply dynamic default
+        console.log("[BOOT: LOGOUT] Applying defaults for guest mode.");
         const current = getCurrentTaxYear();
         setTaxYear(current);
         applyProfile(DEFAULT_PROFILE(current));
-        setIsLoaded(false);
         setProfiles({});
+        setCurrentUser(null);
+        setIsLoaded(true); // IsLoaded true for guests too
+        clearTimeout(rescueTimer);
+        isBootingRef.current = false;
       }
     });
 
@@ -339,7 +374,7 @@ function App() {
       [taxYear]: {
         taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent,
         taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months,
-        workMode, seData, hasCompletedTour
+        workMode, seData, hasCompletedTour, leaseConfig, mileageLogs
       }
     };
     setProfiles(updatedProfiles);
@@ -349,7 +384,7 @@ function App() {
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
     localStorage.setItem('taxTracker_activeYear', taxYear);
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded, leaseConfig, mileageLogs]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -361,12 +396,12 @@ function App() {
 
 
   // --- Helpers ---
-  const getMonthlyValue = (amount, frequency) => {
+  const getMonthlyValue = useCallback((amount, frequency) => {
     if (frequency === 'monthly') return Number(amount) || 0;
     if (frequency === 'annual') return (Number(amount) || 0) / 12;
     if (frequency === 'hourly') return ((Number(amount) || 0) * contractedHours * 52) / 12;
     return Number(amount) || 0;
-  };
+  }, [contractedHours]);
 
   const handleNumericInput = (val, setter) => {
     if (val === '') {
@@ -403,24 +438,26 @@ function App() {
     const monthlyBaseSalary = (sandboxMode && sandboxSalary !== null ? sandboxSalary : baseSalary) / 12;
     const sandboxOtMonthly = (sandboxMode && sandboxOvertime !== null ? sandboxOvertime / 12 : 0);
 
-    return months.map((m, monthIdx) => {
-      const ot15 = m.overtime.filter(o => o.claimed && o.multiplier === 1.5).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
-      const ot20 = m.overtime.filter(o => o.claimed && o.multiplier === 2.0).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+    return (months || []).map((m, monthIdx) => {
+      if (!m) return {}; // Safety guard
+
+      const ot15 = (m.overtime || []).filter(o => o.claimed && o.multiplier === 1.5).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
+      const ot20 = (m.overtime || []).filter(o => o.claimed && o.multiplier === 2.0).reduce((s, o) => s + calculateOvertime(baseSalary, contractedHours, o.hours, o.multiplier), 0);
       const otTotal = ot15 + ot20 + sandboxOtMonthly;
 
       const holidaySupplementAmount = otTotal > 0 ? (otTotal * (holidaySupplementPercent / 100)) : 0;
 
-      const varGrossIncome = m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) + m.deductions.filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + holidaySupplementAmount;
+      const varGrossIncome = (m.income || []).reduce((s, i) => s + (Number(i.amount) || 0), 0) + (m.deductions || []).filter(d => d.type === 'income').reduce((s, d) => s + (Number(d.amount) || 0), 0) + holidaySupplementAmount;
 
-      const baseEnhancementMonthlyTotal = baseEnhancements.reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
+      const baseEnhancementMonthlyTotal = (baseEnhancements || []).reduce((s, e) => s + getMonthlyValue(e.amount, e.frequency), 0);
       const totalMonthlyGrossForPension = monthlyBaseSalary;
       const pension = totalMonthlyGrossForPension * ((sandboxMode && sandboxPension !== null ? sandboxPension : pensionPercent) / 100);
 
-      const varTaxFree = m.deductions.filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const varTaxFree = (m.deductions || []).filter(d => d.type === 'tax_free').reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
       // Map recurring items into specific lines
-      const mappedEnhancements = baseEnhancements.map(e => ({ name: e.name || 'Enhancement', amount: getMonthlyValue(e.amount, e.frequency) }));
-      const mappedSacrifices = baseSacrifices.map(s => ({ name: s.name || 'Sacrifice', amount: getMonthlyValue(s.amount, s.frequency), type: s.type }));
+      const mappedEnhancements = (baseEnhancements || []).map(e => ({ name: e.name || 'Enhancement', amount: getMonthlyValue(e.amount, e.frequency) }));
+      const mappedSacrifices = (baseSacrifices || []).map(s => ({ name: s.name || 'Sacrifice', amount: getMonthlyValue(s.amount, s.frequency), type: s.type }));
 
       // Add sandbox sacrifice if exists
       if (sandboxMode && sandboxSacrifice > 0) {
@@ -433,7 +470,7 @@ function App() {
       }
 
       return {
-        month: MONTHS[monthIdx],
+        month: MONTHS[monthIdx] || 'Month',
         monthIdx: monthIdx,
         gross: monthlyBaseSalary + baseEnhancementMonthlyTotal + otTotal + varGrossIncome,
         ot: otTotal,
@@ -624,9 +661,50 @@ function App() {
         tax: taxSaved,
         ni: niSaved,
         total: taxSaved + niSaved
-      }
+      },
+      mileage: (() => {
+        if (!leaseConfig.startDate) return { isConfigured: false };
+        const start = new Date(leaseConfig.startDate);
+        const now = new Date();
+        const totalDays = leaseConfig.termMonths * 30.44;
+        const daysElapsed = Math.max(0, (now - start) / (1000 * 60 * 60 * 24));
+        const targetMileage = (leaseConfig.totalAllowedMiles / totalDays) * daysElapsed;
+        const latestLog = [...mileageLogs].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+        const actualMileage = latestLog ? Number(latestLog.reading) : 0;
+        const projection = daysElapsed > 0 ? (actualMileage / daysElapsed) * totalDays : 0;
+        
+        // Graph Data: Generate monthly points for both lines
+        const chartData = [];
+        for (let i = 0; i <= leaseConfig.termMonths; i++) {
+          const monthDays = i * 30.44;
+          const planned = (leaseConfig.totalAllowedMiles / totalDays) * monthDays;
+          
+          // Find closest actual log for this month point
+          const logAtMonth = mileageLogs.find(l => {
+            const logDays = (new Date(l.date) - start) / (1000 * 60 * 60 * 24);
+            return Math.abs(logDays - monthDays) < 15; // Within 15 days
+          });
+
+          chartData.push({
+            month: `M${i}`,
+            planned: Math.round(planned),
+            actual: logAtMonth ? Number(logAtMonth.reading) : (i === 0 ? 0 : null)
+          });
+        }
+
+        return {
+          isConfigured: true,
+          daysElapsed,
+          targetMileage,
+          actualMileage,
+          projection,
+          chartData,
+          status: actualMileage > targetMileage ? 'over' : 'under',
+          difference: Math.round(Math.abs(actualMileage - targetMileage))
+        };
+      })()
     };
-  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, months, workMode, seData, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, sandboxSEProfit, sandboxSEAllowance, sandboxSipp, sandboxGiftAid]);
+  }, [monthsActualData, futureBaseData, selectedMonthIdx, taxCode, taxYear, studentLoanPlans, childBenefitCount, pensionType, workMode, seData, sandboxMode, sandboxSEProfit, sandboxSEAllowance, sandboxSipp, sandboxGiftAid, leaseConfig, mileageLogs, getMonthlyValue, baseSacrifices]);
 
   // Analytics Tab Component
   const AnalyticsTab = () => {
@@ -780,6 +858,76 @@ function App() {
                   <div style={{ fontSize: '0.75rem', opacity: 0.6, marginBottom: '0.25rem' }}>Potential Saving</div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success)' }}>£252<span style={{ fontSize: '0.9rem', opacity: 0.6 }}>/yr</span></div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mileage Tracker Dashboard */}
+          {analyticsData.mileage.isConfigured && (
+            <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Car size={20} color="var(--primary)" /> Lease Mileage Progress
+                </h3>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginLeft: 'auto' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>Actual vs Target</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)' }}>
+                      {analyticsData.mileage.actualMileage.toLocaleString()} / {Math.round(analyticsData.mileage.targetMileage).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="dashboard-grid" style={{ marginBottom: '1.5rem', marginTop: 0 }}>
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '0.5rem' }}>
+                  <div className="stat-label">Current Status</div>
+                  <div className="stat-value" style={{ color: analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)' }}>
+                    {analyticsData.mileage.status === 'over' ? `+${analyticsData.mileage.difference.toLocaleString()} Over` : `-${analyticsData.mileage.difference.toLocaleString()} Under`}
+                  </div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '0.5rem' }}>
+                  <div className="stat-label">Projected Total</div>
+                  <div className="stat-value" style={{ color: analyticsData.mileage.projection > leaseConfig.totalAllowedMiles ? 'var(--error)' : 'var(--success)' }}>
+                    {Math.round(analyticsData.mileage.projection).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>Limit: {leaseConfig.totalAllowedMiles.toLocaleString()}</div>
+                </div>
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '0.5rem' }}>
+                  <div className="stat-label">Record Current Reading</div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                    <input
+                      type="number"
+                      placeholder="Enter mileage..."
+                      className="input-field"
+                      style={{ height: '2.5rem', fontSize: '0.9rem' }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.target.value) {
+                          const reading = Number(e.target.value);
+                          if (!isNaN(reading)) {
+                            const newLog = { id: Date.now(), date: new Date().toISOString().split('T')[0], reading };
+                            setMileageLogs([...mileageLogs, newLog]);
+                            e.target.value = '';
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ height: '300px', width: '100%', marginTop: '1.5rem' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analyticsData.mileage.chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
+                    <XAxis dataKey="month" stroke="var(--text-main)" fontSize={12} opacity={0.6} hide={window.innerWidth < 500} />
+                    <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} tickFormatter={(v) => `${v / 1000}k`} />
+                    <Tooltip contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-main)' }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="planned" name="Contracted Miles" stroke="rgba(255,255,255,0.3)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="actual" name="Recorded Miles" stroke={analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)'} strokeWidth={3} connectNulls dot={{ r: 4, fill: analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </div>
           )}
@@ -994,12 +1142,14 @@ function App() {
   };
 
   // Show loading spinner while auth resolves
-  if (currentUser === undefined) {
+  // Show loading spinner while auth resolves or data loads
+  if (currentUser === undefined || !isLoaded) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #1a1f3e 0%, #0a0d1a 100%)' }}>
-        <div style={{ textAlign: 'center', opacity: 0.6 }}>
-          <div style={{ width: '2rem', height: '2rem', border: '3px solid rgba(255,255,255,0.2)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
-          <p>Loading...</p>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '3rem', height: '3rem', border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite', margin: '0 auto 1.5rem', boxShadow: '0 0 20px rgba(99, 102, 241, 0.2)' }} />
+          <p style={{ color: 'var(--text-main)', opacity: 0.8, fontSize: '0.9rem', letterSpacing: '0.05em' }}>PREPARING YOUR DASHBOARD</p>
+          <p style={{ color: 'var(--text-main)', opacity: 0.4, fontSize: '0.7rem', marginTop: '0.5rem' }}>Verifying Cloud Sync...</p>
         </div>
       </div>
     );
@@ -1693,6 +1843,25 @@ function App() {
                 </div>
               </div>
 
+              {/* Lease Section */}
+              <div className="settings-box">
+                <h3><Car size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Lease Contract Details</h3>
+                <div className="dashboard-grid" style={{ marginTop: 0 }}>
+                  <div>
+                    <label className="stat-label">Lease Start Date</label>
+                    <input type="date" className="input-field" value={leaseConfig.startDate} onChange={(e) => setLeaseConfig({ ...leaseConfig, startDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="stat-label">Lease Term (Months)</label>
+                    <input type="number" className="input-field" value={leaseConfig.termMonths} onChange={(e) => handleNumericInput(e.target.value, (v) => setLeaseConfig({ ...leaseConfig, termMonths: v }))} />
+                  </div>
+                  <div>
+                    <label className="stat-label">Total Allowed Miles</label>
+                    <input type="number" className="input-field" value={leaseConfig.totalAllowedMiles} onChange={(e) => handleNumericInput(e.target.value, (v) => setLeaseConfig({ ...leaseConfig, totalAllowedMiles: v }))} />
+                  </div>
+                </div>
+              </div>
+
               <div className="settings-box">
                 <h3><Landmark size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Pension & Allowances</h3>
                 <div className="dashboard-grid" style={{ marginTop: 0 }}>
@@ -2295,7 +2464,7 @@ function App() {
           </div>
         </div>
       )}
-    </div >
+    </div>
   );
 }
 

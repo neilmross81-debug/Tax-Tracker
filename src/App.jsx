@@ -692,12 +692,12 @@ function App() {
                 <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} tickFormatter={(v) => `£${v / 1000}k`} />
                 <Tooltip contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', fontSize: '0.85rem', color: 'var(--text-main)' }} cursor={{ fill: 'rgba(150, 150, 150, 0.1)' }} />
                 <Legend />
-                <Bar dataKey="net" name="Net Pay" stackId="a" fill="var(--primary)" />
-                <Bar dataKey="tax" name="Income Tax" stackId="a" fill="#f43f5e" />
-                <Bar dataKey="ni" name="Nat. Insurance" stackId="a" fill="#fbbf24" />
-                <Bar dataKey="sl" name="Student Loan" stackId="a" fill="#06b6d4" />
-                <Bar dataKey="pension" name="Pension" stackId="a" fill="#10b981" />
-                <Bar dataKey="hicbc" name="HICBC" stackId="a" fill="#6b7280" />
+                <Bar dataKey="net" name="Net Pay" stackId="a" fill="var(--primary)" isAnimationActive={false} />
+                <Bar dataKey="tax" name="Income Tax" stackId="a" fill="#f43f5e" isAnimationActive={false} />
+                <Bar dataKey="ni" name="Nat. Insurance" stackId="a" fill="#fbbf24" isAnimationActive={false} />
+                <Bar dataKey="sl" name="Student Loan" stackId="a" fill="#06b6d4" isAnimationActive={false} />
+                <Bar dataKey="pension" name="Pension" stackId="a" fill="#10b981" isAnimationActive={false} />
+                <Bar dataKey="hicbc" name="HICBC" stackId="a" fill="#6b7280" isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -711,7 +711,7 @@ function App() {
                 <XAxis dataKey="name" stroke="var(--text-main)" fontSize={12} opacity={0.6} />
                 <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} />
                 <Tooltip cursor={{ fill: 'rgba(150, 150, 150, 0.1)' }} contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-main)' }} />
-                <Bar dataKey="ot" name="Overtime" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="ot" name="Overtime" fill="var(--primary)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -798,8 +798,8 @@ function App() {
                     <YAxis stroke="var(--text-main)" fontSize={12} opacity={0.6} tickFormatter={(v) => `${v / 1000}k`} />
                     <Tooltip contentStyle={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-main)' }} />
                     <Legend />
-                    <Line type="monotone" dataKey="planned" name="Contracted Miles" stroke="rgba(255,255,255,0.3)" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="actual" name="Recorded Miles" stroke={analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)'} strokeWidth={3} connectNulls dot={{ r: 4, fill: analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="planned" name="Contracted Miles" stroke="rgba(255,255,255,0.3)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="actual" name="Recorded Miles" stroke={analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)'} strokeWidth={3} connectNulls dot={{ r: 4, fill: analyticsData.mileage.status === 'over' ? 'var(--error)' : 'var(--success)', strokeWidth: 2 }} activeDot={{ r: 6 }} isAnimationActive={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -944,14 +944,8 @@ function App() {
 
 
 
-  const clearCacheAndReload = () => {
-    if (window.confirm("Perform hard reset? Your data is safe. Proceed?")) {
-      navigator.serviceWorker.getRegistrations().then(r => r.forEach(reg => reg.unregister()));
-      window.location.reload(true);
-    }
-  };
 
-  const exportToCSV = () => {
+  const exportToCSV = async () => {
     const headers = ['Month', 'Gross Income', 'Pension', 'Salary Sacrifice', 'Tax Free Expenses', 'Net Pay'];
     const rows = monthsActualData.map((m, i) => {
       const gross = m.gross;
@@ -966,18 +960,37 @@ function App() {
     });
 
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const filename = `TaxTracker_Monthly_Export_${taxYear.replace('/', '-')}.csv`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // Try Share API first (Native Mobile)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'text/csv' })] })) {
+      try {
+        const file = new File([blob], filename, { type: 'text/csv' });
+        await navigator.share({
+          files: [file],
+          title: 'TaxTracker Export',
+          text: `Monthly Export for ${taxYear}`
+        });
+        return;
+      } catch (err) {
+        console.log("Share failed, falling back to download", err);
+      }
+    }
+
+    // Fallback to Download
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `TaxTracker_Monthly_Export_${taxYear.replace('/', '-')}.csv`);
+    link.setAttribute("download", filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  const exportUnclaimedOT = () => {
+  const exportUnclaimedOT = async () => {
     const headers = ['Month', 'Date', 'Reason', 'Hours', 'Multiplier', 'Estimated Value (£)'];
     const unclaimed = allOvertime.filter(o => !o.claimed);
 
@@ -986,15 +999,33 @@ function App() {
     });
 
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const filename = `TaxTracker_Unclaimed_OT_${taxYear.replace('/', '-')}.csv`;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // Try Share API first (Native Mobile)
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'text/csv' })] })) {
+      try {
+        const file = new File([blob], filename, { type: 'text/csv' });
+        await navigator.share({
+          files: [file],
+          title: 'TaxTracker OT Export',
+          text: `Unclaimed Overtime Export for ${taxYear}`
+        });
+        return;
+      } catch (err) {
+        console.log("Share failed, falling back to download", err);
+      }
+    }
+
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `TaxTracker_Unclaimed_OT_${taxYear.replace('/', '-')}.csv`);
+    link.setAttribute("download", filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Show loading spinner while auth resolves
@@ -1028,7 +1059,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.2</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.3</span>
             {isPremium && <span style={{ marginLeft: '0.6rem', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', WebkitTextFillColor: 'white', fontSize: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: '2rem', verticalAlign: 'middle', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.4)' }}>Pro</span>}
           </h1>
         </div>
@@ -1964,9 +1995,6 @@ function App() {
                 <button onClick={() => window.print()} className="btn-secondary">
                   <LayoutDashboard size={14} style={{ marginRight: '0.5rem' }} /> Print PDF Report
                 </button>
-                <button onClick={clearCacheAndReload} className="btn-secondary" style={{ opacity: 0.5 }}>
-                  <RefreshCw size={14} style={{ marginRight: '0.5rem' }} /> Force Update
-                </button>
               </div>
             </div>
           </div>
@@ -1986,7 +2014,7 @@ function App() {
           <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <ShieldCheck size={14} color="var(--success)" /> UK Tax Year {taxYear} - Professional Grade
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem 1rem', borderRadius: '2rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'var(--input-bg)', padding: '0.5rem 1rem', borderRadius: '2rem', border: '1px solid var(--glass-border)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentUser?.email}</span>
             <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
             <button

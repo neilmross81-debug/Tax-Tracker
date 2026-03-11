@@ -267,7 +267,19 @@ export default function SelfEmployedTab({
             </div>
 
             {/* Sub-tab navigation */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', background: 'rgba(0,0,0,0.15)', borderRadius: '0.75rem', padding: '0.25rem' }}>
+            <div style={{ 
+                display: 'flex', 
+                gap: '0.5rem', 
+                marginBottom: '1.5rem', 
+                background: 'rgba(0,0,0,0.15)', 
+                borderRadius: '0.75rem', 
+                padding: '0.25rem',
+                overflowX: 'auto',
+                whiteSpace: 'nowrap',
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none',
+                WebkitOverflowScrolling: 'touch'
+            }}>
                 {subTabs.map(t => (
                     <button
                         key={t.id}

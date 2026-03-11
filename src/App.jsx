@@ -1032,11 +1032,11 @@ function App() {
   // Show loading spinner while auth resolves or data loads
   if (currentUser === undefined || !isLoaded) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #1a1f3e 0%, #0a0d1a 100%)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ width: '3rem', height: '3rem', border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite', margin: '0 auto 1.5rem', boxShadow: '0 0 20px rgba(99, 102, 241, 0.2)' }} />
-          <p style={{ color: 'var(--text-main)', opacity: 0.8, fontSize: '0.9rem', letterSpacing: '0.05em' }}>PREPARING YOUR DASHBOARD</p>
-          <p style={{ color: 'var(--text-main)', opacity: 0.4, fontSize: '0.7rem', marginTop: '0.5rem' }}>Verifying Cloud Sync...</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at top, #1a1f3e 0%, #0a0d1a 100%)', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', maxWidth: '300px' }}>
+          <div style={{ width: '2rem', height: '2rem', border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite', margin: '0 auto 1.5rem', boxShadow: '0 0 20px rgba(99, 102, 241, 0.2)' }} />
+          <p style={{ color: 'var(--text-main)', opacity: 0.8, fontSize: '0.8rem', letterSpacing: '0.05em', margin: '0 0 0.5rem' }}>PREPARING YOUR DASHBOARD</p>
+          <p style={{ color: 'var(--text-main)', opacity: 0.4, fontSize: '0.65rem', marginTop: '0.25rem' }}>Verifying Cloud Sync...</p>
         </div>
       </div>
     );

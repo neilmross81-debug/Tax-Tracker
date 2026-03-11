@@ -366,7 +366,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
             };
 
             // Verbose fallback list to find the exact ID for the "Gemini 2.5 Flash" model
-            const { responseText } = await tryRequest([
+            const { responseText, requiresPremium } = await tryRequest([
                 'gemini-2.5-flash',
                 'gemini-2.5-flash-001',
                 'gemini-2.5-flash-latest',
@@ -402,7 +402,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 setMessages(prev => [...prev, {
                     role: 'assistant',
                     content: responseText,
-                    showPremiumButton: !!(typeof res !== 'undefined' && res?.requiresPremium)
+                    showPremiumButton: !!requiresPremium
                 }]);
             }
         } catch (err) {
@@ -683,7 +683,7 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             rows={1}
                             style={{
                                 flex: 1, background: 'var(--input-bg)', border: '1px solid var(--glass-border)',
-                                borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'var(--text-main)', fontSize: '0.85rem',
+                                borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'var(--text-main)', fontSize: '16px',
                                 resize: 'none', outline: 'none', lineHeight: 1.5, maxHeight: '100px', overflowY: 'auto',
                             }}
                         />

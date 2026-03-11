@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Download, Printer, Car, Receipt, TrendingUp, FileText, AlertCircle, CheckCircle, Clock, Briefcase, ShieldCheck } from 'lucide-react';
 import {
-    calculateClass2NI,
-    calculateClass4NI,
     calculateMileageAllowance,
     calculateSEProfit,
     calculateSelfAssessment,
@@ -38,14 +36,13 @@ export default function SelfEmployedTab({
     payeANI,
     payeIncomeTaxPaid,
     taxCode,
-    currentUser,
+    generatePDF,
 }) {
     const [subTab, setSubTab] = useState('income');
     const [selectedMonth, setSelectedMonth] = useState(0);
 
     const months = seData?.months || Array(12).fill(null).map(() => ({ invoices: [], expenses: [], mileage: [] }));
-    const assets = seData?.assets || [];
-    const vatRegistered = seData?.vatRegistered || false;
+    const assets = useMemo(() => seData?.assets || [], [seData?.assets]);
     const useTradingAllowance = seData?.useTradingAllowance || false;
 
     const updateMonth = (monthIdx, field, newArr) => {
@@ -132,82 +129,7 @@ export default function SelfEmployedTab({
     };
 
     const exportSAReport = () => {
-        const win = window.open('', '_blank');
-        const today = new Date().toLocaleDateString('en-GB');
-        win.document.write(`
-      <!DOCTYPE html><html><head>
-      <title>Self Assessment Report - ${taxYear}</title>
-      <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #111; font-size: 14px; }
-        h1 { color: #4f46e5; } h2 { color: #374151; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-        th { background: #f9fafb; text-align: left; padding: 8px; border: 1px solid #e5e7eb; }
-        td { padding: 8px; border: 1px solid #e5e7eb; }
-        .total { font-weight: bold; background: #f9fafb; }
-        .highlight { background: #eff6ff; font-weight: bold; }
-        .warn { color: #b45309; background: #fffbeb; padding: 12px; border-radius: 6px; border: 1px solid #fde68a; margin: 16px 0; }
-      </style></head><body>
-      <h1>Self Assessment Summary</h1>
-      <p><strong>Tax Year:</strong> ${taxYear} &nbsp; <strong>Generated:</strong> ${today}</p>
-
-      <h2>Income Summary</h2>
-      <table>
-        <tr><th>Month</th><th>Client</th><th>Amount</th><th>Status</th></tr>
-        ${months.flatMap((m, i) => (m.invoices || []).map(inv => `
-          <tr><td>${MONTHS[i]}</td><td>${inv.invoiceNumber ? `[#${inv.invoiceNumber}] ` : ''}${inv.client || '—'}</td><td>£${fmt(inv.amount)}</td><td>${inv.paid ? 'Paid' : 'Unpaid'}</td></tr>
-        `)).join('') || '<tr><td colspan="4">No invoices recorded</td></tr>'}
-        <tr class="total"><td colspan="2"><strong>Total Paid Income</strong></td><td><strong>£${fmt(totals.totalIncome)}</strong></td><td></td></tr>
-      </table>
-
-      <h2>Expense Summary</h2>
-      <table>
-        <tr><th>Month</th><th>Category</th><th>Description</th><th>Amount</th></tr>
-        ${months.flatMap((m, i) => (m.expenses || []).map(exp => `
-          <tr><td>${MONTHS[i]}</td><td>${EXPENSE_CATEGORIES.find(c => c.value === exp.category)?.label || exp.category}</td><td>${exp.description || '—'}</td><td>£${fmt(exp.amount)}</td></tr>
-        `)).join('') || '<tr><td colspan="4">No expenses recorded</td></tr>'}
-        <tr class="total"><td colspan="3"><strong>Total Expenses</strong></td><td><strong>£${fmt(totals.totalExpenses)}</strong></td></tr>
-      </table>
-
-      <h2>Mileage Summary</h2>
-      <table>
-        <tr><th>Month</th><th>Description</th><th>Miles</th><th>HMRC Allowance</th></tr>
-        ${months.flatMap((m, i) => (m.mileage || []).map(ml => {
-            const v = Number(ml.miles || 0) <= 10000 ? Number(ml.miles) * 0.45 : 10000 * 0.45 + (Number(ml.miles) - 10000) * 0.25;
-            return `<tr><td>${MONTHS[i]}</td><td>${ml.description || '—'}</td><td>${ml.miles}</td><td>£${fmt(v)}</td></tr>`;
-        })).join('') || '<tr><td colspan="4">No mileage recorded</td></tr>'}
-        <tr class="total"><td colspan="2"><strong>Total Mileage</strong></td><td><strong>${totals.totalMiles} miles</strong></td><td><strong>£${fmt(totals.mileageCalc.totalAllowance)}</strong></td></tr>
-      </table>
-
-      <h2>Profit Calculation</h2>
-      <table>
-        <tr><td>Gross Income (paid invoices)</td><td>£${fmt(totals.profitCalc.grossIncome)}</td></tr>
-        <tr><td>${useTradingAllowance ? 'Trading Allowance' : 'Total Allowable Deductions'}</td><td>−£${fmt(totals.profitCalc.deduction)}</td></tr>
-        <tr class="highlight"><td><strong>Taxable Profit</strong></td><td><strong>£${fmt(totals.profitCalc.profit)}</strong></td></tr>
-      </table>
-
-      <h2>Self Assessment Tax Estimate</h2>
-      <table>
-        <tr><td>Income Tax on SE profit (marginal)</td><td>£${fmt(totals.sa.seIncomeTax)}</td></tr>
-        <tr><td>Class 2 NI</td><td>£${fmt(totals.sa.class2NI)}</td></tr>
-        <tr><td>Class 4 NI</td><td>£${fmt(totals.sa.class4NI)}</td></tr>
-        <tr class="highlight"><td><strong>Total SA Bill</strong></td><td><strong>£${fmt(totals.sa.totalSABill)}</strong></td></tr>
-      </table>
-
-      ${totals.sa.poaRequired ? `
-      <h2>Payments on Account</h2>
-      <div class="warn">⚠️ Payments on Account are required as your SA bill exceeds £1,000.</div>
-      <table>
-        <tr><td>${totals.sa.poa1Date} (1st Payment on Account)</td><td>£${fmt(totals.sa.poaAmount)}</td></tr>
-        <tr><td>${totals.sa.poa2Date} (2nd Payment on Account)</td><td>£${fmt(totals.sa.poaAmount)}</td></tr>
-        <tr class="highlight"><td><strong>January Payment (Bill + 1st PoA)</strong></td><td><strong>£${fmt(totals.sa.januaryPayment)}</strong></td></tr>
-      </table>
-      ` : '<p>✅ Payments on Account not required (SA bill under £1,000).</p>'}
-
-      <p style="margin-top:32px;font-size:12px;color:#6b7280;">This report is an estimate only and should not be used as a formal tax return. Consult an accountant or use HMRC's Self Assessment service at gov.uk.</p>
-      </body></html>
-    `);
-        win.document.close();
-        win.print();
+        generatePDF('se-report-content', `TaxTracker_SA_Report_${taxYear.replace('/', '-')}.pdf`);
     };
 
     const subTabs = [
@@ -219,7 +141,7 @@ export default function SelfEmployedTab({
     ];
 
     return (
-        <div style={{ paddingBottom: '2rem' }}>
+        <div id="se-report-content" style={{ paddingBottom: '2rem' }}>
             {/* Header */}
             <div className="glass-card" style={{ marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
@@ -287,13 +209,13 @@ export default function SelfEmployedTab({
                         style={{
                             flex: 1,
                             padding: '0.6rem 0.25rem',
-                            background: subTab === t.id ? 'var(--primary)' : 'transparent',
-                            border: 'none',
+                            background: subTab === t.id ? 'var(--primary)' : 'rgba(0,0,0,0.3)',
+                            border: '1px solid rgba(255,255,255,0.1)',
                             borderRadius: '0.5rem',
-                            color: 'white',
+                            color: subTab === t.id ? 'white' : 'rgba(255,255,255,0.7)',
                             cursor: 'pointer',
                             fontSize: '0.78rem',
-                            fontWeight: subTab === t.id ? 700 : 400,
+                            fontWeight: subTab === t.id ? 700 : 500,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',

@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot, Smartphone, Car, Gauge } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode } from './logic/TaxCalculator';
@@ -97,6 +99,44 @@ function App() {
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [leaseConfig, setLeaseConfig] = useState({ startDate: '', termMonths: 36, totalAllowedMiles: 30000 });
   const [mileageLogs, setMileageLogs] = useState([]);
+  const [chartKey, setChartKey] = useState(0);
+
+  // Force chart re-calculation when arriving at Analytics tab
+  useLayoutEffect(() => {
+    if (activeTab === 'analytics') {
+      // Small delay to ensure DOM is settled/visible
+      const timer = setTimeout(() => {
+        setChartKey(prev => prev + 1);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab]);
+
+  const generatePDF = async (elementId, filename) => {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#0f172a' // Match app background
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(filename);
+    } catch (err) {
+      console.error('PDF Generation Error:', err);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
 
   // --- Theme State ---
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
@@ -685,7 +725,7 @@ function App() {
           {/* Monthly Timeline */}
           <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
             <h3 style={{ margin: '0 0 1.5rem 0' }}>Income vs. Deductions (Monthly)</h3>
-            <ResponsiveContainer width="100%" height={350}>
+            <ResponsiveContainer width="100%" height={350} key={`timeline-${chartKey}`}>
               <BarChart data={analyticsData.timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--text-main)" fontSize={12} opacity={0.6} />
@@ -705,7 +745,7 @@ function App() {
           {/* Overtime Tracker */}
           <div className="glass-card" style={{ gridColumn: '1 / -1' }}>
             <h3 style={{ margin: '0 0 1.5rem 0' }}>Overtime History (£)</h3>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={250} key={`ot-${chartKey}`}>
               <BarChart data={analyticsData.timeline}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--text-main)" fontSize={12} opacity={0.6} />
@@ -791,7 +831,7 @@ function App() {
               </div>
 
               <div style={{ height: '300px', width: '100%', marginTop: '1.5rem' }}>
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" key={`mileage-${chartKey}`}>
                   <LineChart data={analyticsData.mileage.chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(150, 150, 150, 0.2)" vertical={false} />
                     <XAxis dataKey="month" stroke="var(--text-main)" fontSize={12} opacity={0.6} hide={window.innerWidth < 500} />
@@ -1059,7 +1099,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.3</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.6</span>
             {isPremium && <span style={{ marginLeft: '0.6rem', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', WebkitTextFillColor: 'white', fontSize: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: '2rem', verticalAlign: 'middle', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.4)' }}>Pro</span>}
           </h1>
         </div>
@@ -1602,13 +1642,14 @@ function App() {
             payeIncomeTaxPaid={analyticsData.projections.incomeTax}
             taxCode={taxCode}
             currentUser={currentUser}
+            generatePDF={generatePDF}
           />
         )}
 
         {activeTab === 'guide' && <GuideTab taxYear={taxYear} workMode={workMode} />}
 
         {activeTab === 'overtime' && (
-          <div>
+          <div id="ot-report-content">
             <div className="glass-card" style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
               <button
                 className="btn-primary btn-full btn-add btn-prominent"
@@ -1682,8 +1723,8 @@ function App() {
                 <button onClick={exportUnclaimedOT} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
                   <Download size={14} style={{ marginRight: '0.5rem' }} /> Export Unclaimed OT (.csv)
                 </button>
-                <button onClick={() => window.print()} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
-                  <Printer size={14} style={{ marginRight: '0.5rem' }} /> Print / PDF Report
+                <button onClick={() => generatePDF('ot-report-content', `TaxTracker_OT_Report_${taxYear.replace('/', '-')}.pdf`)} className="btn-secondary" style={{ fontSize: '0.8rem' }}>
+                  <Printer size={14} style={{ marginRight: '0.5rem' }} /> Export PDF Report
                 </button>
               </div>
             </div>
@@ -2305,6 +2346,7 @@ function App() {
         isPremium={isPremium}
         onRequestPremium={() => setShowPremiumModal(true)}
       />
+
 
       {showPremiumModal && (
         <div className="modal-overlay" onClick={() => setShowPremiumModal(false)}>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Trash2, Calculator, TrendingUp, Download, Info, AlertTriangle, Calendar, Clock, Receipt, Settings, RefreshCw, LayoutDashboard, CheckSquare, Square, ExternalLink, LogOut, BarChart3, PieChart as PieChartIcon, ShieldCheck, Printer, Landmark, Copy, Briefcase, BookOpen, Sun, Moon, Bot, Smartphone, Car, Gauge } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode, parseTaxCode } from './logic/TaxCalculator';
+import { calculateTax, projectAnnual, getTaxTrapAdvice, calculateOvertime, recommendTaxCode } from './logic/TaxCalculator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -13,7 +13,7 @@ import AiAssistant from './AiAssistant';
 import { calculateSEProfit, calculateMileageAllowance, calculateSelfAssessment } from './logic/SelfAssessmentCalculator';
 
 const MONTHS = ['April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'January', 'February', 'March'];
-export const getCurrentTaxYear = () => {
+const getCurrentTaxYear = () => {
   const now = new Date();
   const year = now.getFullYear();
   // UK tax year starts April 6th
@@ -123,7 +123,7 @@ function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const isBootingRef = useRef(false);
 
-  const DEFAULT_PROFILE = () => ({
+  const DEFAULT_PROFILE = useCallback(() => ({
     taxCode: '1257L', baseSalary: 45000, contractedHours: 37.5,
     pensionPercent: 5, pensionType: 'standard', holidaySupplementPercent: 8.3,
     studentLoanPlans: [], childBenefitCount: 0,
@@ -136,9 +136,9 @@ function App() {
     isPremium: true,
     leaseConfig: { startDate: '', termMonths: 36, totalAllowedMiles: 30000 },
     mileageLogs: []
-  });
+  }), []);
 
-  const applyProfile = (prof) => {
+  const applyProfile = useCallback((prof) => {
     setTaxCode(prof.taxCode || '1257L');
     setBaseSalary(prof.baseSalary || 45000);
     setContractedHours(prof.contractedHours || 37.5);
@@ -157,7 +157,7 @@ function App() {
     setIsPremium(true); // Always Pro for Paid App Launch
     setLeaseConfig(prof.leaseConfig || { startDate: '', termMonths: 36, totalAllowedMiles: 30000 });
     setMileageLogs(prof.mileageLogs || []);
-  };
+  }, []);
 
   // Auth state listener - fires once on mount
   useEffect(() => {
@@ -229,14 +229,14 @@ function App() {
     });
 
     return () => unsub();
-  }, []);
+  }, [DEFAULT_PROFILE, applyProfile, isLoaded]);
 
   // Trigger tour if not completed
   useEffect(() => {
     if (isLoaded && currentUser && !hasCompletedTour && tourStep === null) {
       setTourStep(0);
     }
-  }, [isLoaded, currentUser, hasCompletedTour]);
+  }, [isLoaded, currentUser, hasCompletedTour, tourStep]);
 
   // --- Tour Steps Definition ---
   const tourSteps = [
@@ -347,7 +347,7 @@ function App() {
         document.documentElement.style.setProperty('--spotlight-r', `0px`);
         setStyle({ '--modal-x': '50%', '--modal-y': '50%' });
       }
-    }, [tourStep]);
+    }, [step]);
 
     if (tourStep === null || !tourSteps[tourStep]) return null;
 
@@ -386,7 +386,7 @@ function App() {
     // Also keep localStorage as offline backup
     localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
     localStorage.setItem('taxTracker_activeYear', taxYear);
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded, leaseConfig, mileageLogs]);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded, currentUser, profiles, taxYear, leaseConfig, mileageLogs]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -433,7 +433,7 @@ function App() {
       netSacrifice: netBaseSacrificeMonthly,
       taxFree: 0
     };
-  }, [baseSalary, baseEnhancements, baseSacrifices, pensionPercent, contractedHours, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
+  }, [baseSalary, baseEnhancements, baseSacrifices, pensionPercent, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, getMonthlyValue]);
 
   // 2. Prepare Actual Month Data (April to selected month)
   const monthsActualData = useMemo(() => {
@@ -486,7 +486,7 @@ function App() {
         rawMonthsActual: m
       };
     });
-  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, holidaySupplementPercent, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice]);
+  }, [months, baseSalary, contractedHours, pensionPercent, baseEnhancements, baseSacrifices, holidaySupplementPercent, sandboxMode, sandboxSalary, sandboxPension, sandboxOvertime, sandboxSacrifice, getMonthlyValue]);
 
   // 3. Analytics & Projections Data
   const analyticsData = useMemo(() => {
@@ -711,12 +711,12 @@ function App() {
   // Analytics Tab Component
   const AnalyticsTab = () => {
     const COLORS = ['#6366f1', '#10b981', '#f43f5e', '#8b5cf6'];
-    const pieData = [
+    /* const pieData = [
       { name: 'Take Home', value: analyticsData.totalTakeHome, color: '#6366f1' },
       { name: 'Income Tax', value: analyticsData.projections.incomeTax + analyticsData.seSABill, color: '#f43f5e' },
       { name: 'Nat. Insurance', value: analyticsData.projections.ni, color: '#fbbf24' },
       { name: 'Pension', value: analyticsData.projections.pensionContribution, color: '#10b981' }
-    ];
+    ]; */
 
     return (
       <div className="analytics-view">
@@ -969,14 +969,14 @@ function App() {
 
   const totalMonthlyNet = (monthlyResultsAnnualized.annualTakeHome / 12) + currentMonthFull.taxFree;
 
-  const chartData = [
+  /* const chartData = [
     { name: 'Net Pay', value: monthlyResultsAnnualized.annualTakeHome / 12, color: 'var(--success)' },
     { name: 'Income Tax', value: monthlyResultsAnnualized.incomeTax / 12, color: 'var(--error)' },
     { name: 'NI', value: monthlyResultsAnnualized.ni / 12, color: '#f59e0b' },
     { name: 'Student Loan', value: monthlyResultsAnnualized.studentLoan / 12, color: '#06b6d4' },
     { name: 'Pension', value: monthlyResultsAnnualized.pensionContribution / 12, color: 'var(--primary)' },
     { name: 'Other', value: monthlyResultsAnnualized.hicbc / 12 + monthlyResultsAnnualized.netDeductions / 12, color: '#6b7280' }
-  ].filter(i => i.value > 0);
+  ].filter(i => i.value > 0); */
 
   // Overtime Processing
   const allOvertime = useMemo(() => {
@@ -998,18 +998,9 @@ function App() {
   const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary, taxCode);
 
   // --- Handlers ---
-  const addBaseItem = (type) => {
-    const newItem = { id: Date.now().toString(), name: 'New Item', amount: '', frequency: 'monthly', type: type === 'sacrifice' ? 'salary_sacrifice' : 'income' };
-    if (type === 'enhancement') setBaseEnhancements([...baseEnhancements, newItem]);
-    else setBaseSacrifices([...baseSacrifices, newItem]);
-  };
 
-  const updateBaseItem = (type, id, field, val) => {
-    const list = type === 'enhancement' ? [...baseEnhancements] : [...baseSacrifices];
-    const updated = list.map(i => i.id === id ? { ...i, [field]: val } : i);
-    if (type === 'enhancement') setBaseEnhancements(updated);
-    else setBaseSacrifices(updated);
-  };
+
+
 
   const removeBaseItem = (type, id) => {
     if (type === 'enhancement') setBaseEnhancements(baseEnhancements.filter(i => i.id !== id));
@@ -1079,16 +1070,7 @@ function App() {
     setMonths(n);
   };
 
-  const moveOvertimeItem = (oldMonthIdx, newMonthIdx, id) => {
-    if (oldMonthIdx === newMonthIdx) return;
-    const itemToMove = months[oldMonthIdx].overtime.find(i => i.id === id);
-    if (!itemToMove) return;
 
-    const n = [...months];
-    n[oldMonthIdx].overtime = n[oldMonthIdx].overtime.filter(i => i.id !== id);
-    n[newMonthIdx].overtime.push(itemToMove);
-    setMonths(n);
-  };
 
   const clearCacheAndReload = () => {
     if (window.confirm("Perform hard reset? Your data is safe. Proceed?")) {

@@ -92,17 +92,7 @@ function App() {
   const [selectedMonthIdx, setSelectedMonthIdx] = useState(0);
   const [months, setMonths] = useState(Array(12).fill(null).map(() => ({ income: [], overtime: [], deductions: [] })));
 
-  // --- Tour State ---
-  const [sourceYearForCopy, setSourceYearForCopy] = useState('2024/25');
-  const [targetYearForCopy, setTargetYearForCopy] = useState('2025/26');
-  const [tourStep, setTourStep] = useState(null);
-  const [showOtModal, setShowOtModal] = useState(false);
-  const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
-
-  const [showBaseModifierModal, setShowBaseModifierModal] = useState(false);
-  const [baseModifierModalData, setBaseModifierModalData] = useState({ id: null, type: 'enhancement', name: '', amount: '', frequency: 'monthly', sacrificeType: 'salary_sacrifice' });
-  // null or index
-  const [hasCompletedTour, setHasCompletedTour] = useState(true); // default true, set false on new profiles
+  const [hasCompletedTour, setHasCompletedTour] = useState(true);
   const [isPremium, setIsPremium] = useState(true);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [leaseConfig, setLeaseConfig] = useState({ startDate: '', termMonths: 36, totalAllowedMiles: 30000 });
@@ -239,142 +229,16 @@ function App() {
     return () => unsub();
   }, [DEFAULT_PROFILE, applyProfile, isLoaded]);
 
-  // Trigger tour if not completed
-  useEffect(() => {
-    if (isLoaded && currentUser && !hasCompletedTour && tourStep === null) {
-      setTourStep(0);
-    }
-  }, [isLoaded, currentUser, hasCompletedTour, tourStep]);
+  // Switch Year State
+  const [sourceYearForCopy, setSourceYearForCopy] = useState('2024/25');
+  const [targetYearForCopy, setTargetYearForCopy] = useState('2025/26');
 
-  // --- Tour Steps Definition ---
-  const tourSteps = [
-    {
-      title: "1. Tax Year & Mode",
-      content: "Select your tax year and working status. We support PAYE, Self-Employed, or both combined!",
-      target: "#tour-tax-year",
-      tab: 'config'
-    },
-    {
-      title: "2. Base Salary",
-      content: "Enter your annual gross salary here. This is the foundation for all calculations.",
-      target: "#tour-salary",
-      tab: 'config'
-    },
-    {
-      title: "3. Pension (Salary Sacrifice)",
-      content: "Select your pension type. If you have Salary Sacrifice, you'll see your extra NI savings!",
-      target: "#tour-pension-type",
-      tab: 'config'
-    },
-    {
-      title: "4. Advanced Analytics",
-      content: "Track your wealth, tax traps, and trends. Hover over charts for itemized monthly data.",
-      target: "#tour-analytics-trigger",
-      tab: 'analytics'
-    },
-    {
-      title: "5. Self-Employed Tracker",
-      content: "If you're self-employed, log your invoices, expenses, and mileage here for the SA report.",
-      target: "#tour-se-nav",
-      tab: 'selfemployed'
-    },
-    {
-      title: "6. AI Tax Assistant",
-      content: "Have a tax question? Ask our AI assistant! It knows your data and HMRC rules.",
-      target: "#tour-bot-trigger",
-      tab: 'dashboard'
-    },
-    {
-      title: "7. Overtime Tracker",
-      content: "Log extra hours. We track what's unclaimed so you never miss a penny.",
-      target: "#tour-ot-nav",
-      tab: 'overtime'
-    }
-  ];
+  const [showOtModal, setShowOtModal] = useState(false);
+  const [otModalData, setOtModalData] = useState({ monthIdx: selectedMonthIdx, hours: '', multiplier: 1.5, reason: '', date: new Date().toISOString().split('T')[0] });
 
-  const handleNextTour = () => {
-    if (tourStep < tourSteps.length - 1) {
-      const nextStep = tourStep + 1;
-      if (tourSteps[nextStep].tab) {
-        setActiveTab(tourSteps[nextStep].tab);
-      }
-      setTourStep(nextStep);
-    } else {
-      completeTour();
-    }
-  };
+  const [showBaseModifierModal, setShowBaseModifierModal] = useState(false);
+  const [baseModifierModalData, setBaseModifierModalData] = useState({ id: null, type: 'enhancement', name: '', amount: '', frequency: 'monthly', sacrificeType: 'salary_sacrifice' });
 
-  const completeTour = () => {
-    setTourStep(null);
-    setHasCompletedTour(true);
-    // Persist to Firebase if possible
-    if (currentUser) {
-      const userDoc = doc(db, 'users', currentUser.uid);
-      setDoc(userDoc, { profiles: { [taxYear]: { hasCompletedTour: true } } }, { merge: true });
-    }
-  };
-
-  const TourOverlay = () => {
-    const step = tourSteps[tourStep];
-    const [style, setStyle] = useState({});
-
-    useEffect(() => {
-      if (step && step.target) {
-        const el = document.querySelector(step.target);
-        if (el) {
-          const rect = el.getBoundingClientRect();
-          const padding = 10;
-          const x = rect.left + rect.width / 2;
-          const y = rect.top + rect.height / 2;
-          const r = Math.max(rect.width, rect.height) / 2 + padding;
-
-          document.documentElement.style.setProperty('--spotlight-x', `${x}px`);
-          document.documentElement.style.setProperty('--spotlight-y', `${y}px`);
-          document.documentElement.style.setProperty('--spotlight-r', `${r}px`);
-
-          // Position modal
-          const modalX = x > window.innerWidth / 2 ? x - 180 : x + 180;
-          const modalY = y > window.innerHeight / 2 ? y - 120 : y + 120;
-
-          // Constrain within viewport
-          const finalX = Math.max(160, Math.min(window.innerWidth - 160, modalX));
-          const finalY = Math.max(100, Math.min(window.innerHeight - 300, modalY));
-
-          setStyle({
-            '--modal-x': `${finalX}px`,
-            '--modal-y': `${finalY}px`
-          });
-
-          el.classList.add('tour-target-highlight');
-          return () => el.classList.remove('tour-target-highlight');
-        }
-      } else {
-        // Reset spotlight to center
-        document.documentElement.style.setProperty('--spotlight-x', `50%`);
-        document.documentElement.style.setProperty('--spotlight-y', `50%`);
-        document.documentElement.style.setProperty('--spotlight-r', `0px`);
-        setStyle({ '--modal-x': '50%', '--modal-y': '50%' });
-      }
-    }, [step]);
-
-    if (tourStep === null || !tourSteps[tourStep]) return null;
-
-    return (
-      <div className="tour-overlay">
-        <div className="glass-card tour-modal" style={style}>
-          <div className="tour-step-indicator">STEP {tourStep + 1} OF {tourSteps.length}</div>
-          <h3 style={{ margin: '0 0 0.5rem 0' }}>{step.title}</h3>
-          <p style={{ fontSize: '0.9rem', opacity: 0.8, lineHeight: 1.4 }}>{step.content}</p>
-          <div className="tour-controls">
-            <button className="btn-secondary" onClick={() => setTourStep(null)}>Skip</button>
-            <button className="btn-primary" onClick={handleNextTour}>
-              {tourStep === tourSteps.length - 1 ? 'Finish' : 'Next'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   // Cloud save - debounced on any data change
   useEffect(() => {
@@ -1164,7 +1028,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v28.0</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.2</span>
             {isPremium && <span style={{ marginLeft: '0.6rem', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', WebkitTextFillColor: 'white', fontSize: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: '2rem', verticalAlign: 'middle', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.4)' }}>Pro</span>}
           </h1>
         </div>
@@ -1811,7 +1675,7 @@ function App() {
                 <h3><Info size={16} style={{ verticalAlign: '-2px', marginRight: '0.4rem' }} /> Basic Details</h3>
                 <div className="dashboard-grid" style={{ marginTop: 0 }}>
                   <div><label className="stat-label">Tax Year</label>
-                    <select id="tour-tax-year" value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
+                    <select value={taxYear} onChange={(e) => handleYearSwitch(e.target.value)} className="input-field">
                       {[...Array(17)].map((_, i) => {
                         const y1 = 2024 + i;
                         const y2 = String(y1 + 1).slice(-2);
@@ -1823,13 +1687,13 @@ function App() {
                   </div>
                   <div>
                     <label className="stat-label">Work Mode</label>
-                    <select id="tour-work-mode" value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
+                    <select value={workMode} onChange={(e) => setWorkMode(e.target.value)} className="input-field">
                       <option value="paye" style={{ background: '#1e293b' }}>PAYE Only</option>
                       <option value="se" style={{ background: '#1e293b' }}>Self-Employed Only</option>
                       <option value="both" style={{ background: '#1e293b' }}>PAYE + Self-Employed</option>
                     </select>
                   </div>
-                  <div><label className="stat-label">Annual Salary (£)</label><input type="number" id="tour-salary" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
+                  <div><label className="stat-label">Annual Salary (£)</label><input type="number" value={baseSalary} onChange={(e) => handleNumericInput(e.target.value, setBaseSalary)} className="input-field" /></div>
                   <div><label className="stat-label">Contracted Hours (wk)</label><input type="number" value={contractedHours} onChange={(e) => handleNumericInput(e.target.value, setContractedHours)} className="input-field" /></div>
                   <div><label className="stat-label">Tax Code</label><input value={taxCode} onChange={(e) => setTaxCode(e.target.value)} className="input-field" /></div>
                 </div>
@@ -1860,7 +1724,7 @@ function App() {
                   <div><label className="stat-label">Base Pension %</label><input type="number" value={pensionPercent} onChange={(e) => handleNumericInput(e.target.value, setPensionPercent)} className="input-field" /></div>
                   <div>
                     <label className="stat-label">Pension Type (Salary Sacrifice?)</label>
-                    <select id="tour-pension-type" value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
+                    <select value={pensionType} onChange={(e) => setPensionType(e.target.value)} className="input-field">
                       <option value="standard" style={{ background: '#1e293b' }}>Standard (Relief at Source)</option>
                       <option value="salary_sacrifice" style={{ background: '#1e293b' }}>Salary Sacrifice (Pension SS)</option>
                     </select>
@@ -2147,16 +2011,16 @@ function App() {
           <LayoutDashboard size={20} />
           <span>Home</span>
         </div>
-        <div className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} id="tour-analytics-trigger" onClick={() => setActiveTab('analytics')}>
+        <div className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTab('analytics')}>
           <BarChart3 size={20} />
           <span>Stats</span>
         </div>
-        <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} id="tour-ot-nav" onClick={() => setActiveTab('overtime')}>
+        <div className={`nav-item ${activeTab === 'overtime' ? 'active' : ''}`} onClick={() => setActiveTab('overtime')}>
           <Clock size={20} />
           <span>OT</span>
         </div>
         {workMode !== 'paye' && (
-          <div className={`nav-item ${activeTab === 'selfemployed' ? 'active' : ''}`} id="tour-se-nav" onClick={() => setActiveTab('selfemployed')}>
+          <div className={`nav-item ${activeTab === 'selfemployed' ? 'active' : ''}`} onClick={() => setActiveTab('selfemployed')}>
             <Briefcase size={20} />
             <span>SE</span>
           </div>
@@ -2391,7 +2255,6 @@ function App() {
         )
       }
 
-      {tourStep !== null && <TourOverlay />}
 
       {/* AI Tax Assistant - floating chat button */}
       <AiAssistant

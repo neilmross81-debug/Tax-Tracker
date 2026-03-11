@@ -162,22 +162,29 @@ function App() {
   // Auth state listener - fires once on mount
   useEffect(() => {
     console.log("[BOOT: AUTH_START] Listening for auth changes...");
+    
+    // Rescue Watchdog 2.0 (Top-level mount)
+    const rescueTimer = setTimeout(() => {
+      if (!isLoaded) {
+        console.warn("[BOOT: WATCHDOG_FIRED] Firebase unresponsive after 8s. Force-releasing to Guest mode.");
+        const current = getCurrentTaxYear();
+        setTaxYear(current);
+        applyProfile(DEFAULT_PROFILE(current));
+        setProfiles({});
+        setCurrentUser(null);
+        setIsLoaded(true);
+        isBootingRef.current = false; // Allow auth to take over later if it eventually responds
+      }
+    }, 8000);
+
     const unsub = onAuthStateChanged(auth, async (user) => {
       console.log(`[BOOT: AUTH_EVENT] User: ${user ? user.uid : 'Logged Out'}`);
       
-      if (isBootingRef.current) {
-        console.log("[BOOT: SKIP] Already booting, ignoring secondary event.");
+      if (isBootingRef.current && isLoaded) {
+        console.log("[BOOT: SKIP] App already loaded, ignoring redundant event.");
         return;
       }
       isBootingRef.current = true;
-
-      // 5-Second Rescue Timeout
-      const rescueTimer = setTimeout(() => {
-        if (!isLoaded) {
-          console.warn("[BOOT: RESCUE] Data fetch timed out after 5s. Proceeding with local/defaults.");
-          setIsLoaded(true);
-        }
-      }, 5000);
 
       if (user) {
         try {
@@ -212,7 +219,6 @@ function App() {
           setCurrentUser(user);
           setIsLoaded(true);
         } finally {
-          clearTimeout(rescueTimer);
           isBootingRef.current = false;
         }
       } else {
@@ -223,9 +229,11 @@ function App() {
         setProfiles({});
         setCurrentUser(null);
         setIsLoaded(true); // IsLoaded true for guests too
-        clearTimeout(rescueTimer);
         isBootingRef.current = false;
       }
+      
+      // Successfully responded, clear watchdog
+      clearTimeout(rescueTimer);
     });
 
     return () => unsub();

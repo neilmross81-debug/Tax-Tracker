@@ -151,7 +151,9 @@ const parsePayslipJson = (text) => {
     try {
         const match = text.match(/```json\s*([\s\S]*?)```/);
         if (match) return JSON.parse(match[1]);
-    } catch { }
+    } catch (e) {
+        console.error("JSON parse error:", e);
+    }
     return null;
 };
 
@@ -160,7 +162,7 @@ const detectPositiveConfirmation = (text) => {
     return /^(yes|yeah|yep|ok|okay|sure|go ahead|do it|update|confirm|correct|absolutely|please|y)/.test(t);
 };
 
-export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings, onAiAction, selectedMonthIdx, isPremium, onRequestPremium }) {
+export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear, months, onUpdateMonth, geminiApiKey, onGoToSettings, onAiAction, isPremium, onRequestPremium }) {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
@@ -189,22 +191,51 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                 setIsListening(false);
             };
 
-            recognition.onerror = () => setIsListening(false);
+            recognition.onerror = (event) => {
+                console.error("SpeechRecognition error:", event.error);
+                setIsListening(false);
+                if (event.error === 'not-allowed') {
+                  setError("Microphone permission denied. Please allow mic access in your browser/app settings.");
+                } else {
+                  setError(`Voice input error: ${event.error}`);
+                }
+            };
             recognition.onend = () => setIsListening(false);
             recognitionRef.current = recognition;
+
+            return () => {
+                if (recognitionRef.current) {
+                    recognitionRef.current.stop();
+                    recognitionRef.current.onresult = null;
+                    recognitionRef.current.onerror = null;
+                    recognitionRef.current.onend = null;
+                }
+            };
+        } else {
+            console.warn("Speech recognition not supported in this environment.");
         }
     }, []);
 
     const toggleListening = () => {
         if (isListening) {
-            recognitionRef.current?.stop();
+            try {
+                recognitionRef.current?.stop();
+            } catch (e) {
+                console.error("Stop error:", e);
+                setIsListening(false);
+            }
         } else {
             setError('');
             try {
-                recognitionRef.current?.start();
-                setIsListening(true);
+                if (!recognitionRef.current) {
+                    throw new Error("Speech recognition not supported in this browser.");
+                }
+                recognitionRef.current.start();
+                // setIsListening(true) will be handled by onstart callback for better sync
             } catch (e) {
-                setError("Speech recognition failed to start.");
+                console.error("SpeechRecognition start error:", e);
+                setIsListening(false);
+                setError(e.message || "Speech recognition failed to start.");
             }
         }
     };
@@ -214,7 +245,11 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
     }, [messages, isLoading]);
 
     useEffect(() => {
-        if (isOpen && inputRef.current) setTimeout(() => inputRef.current?.focus(), 100);
+        let timer;
+        if (isOpen && inputRef.current) {
+            timer = setTimeout(() => inputRef.current?.focus(), 100);
+        }
+        return () => clearTimeout(timer);
     }, [isOpen]);
 
     const applyPayslipToMonth = (monthIdx, data) => {
@@ -674,19 +709,32 @@ export default function AiAssistant({ analyticsData, workMode, taxCode, taxYear,
                             </button>
                         </div>
 
-                        <textarea
-                            ref={inputRef}
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder={pendingPayslip?.awaitingMonth ? "Which month is this payslip for?" : (pendingPayslip && pendingPayslip.monthIdx !== null) ? `Type 'yes' to update ${MONTHS[pendingPayslip.monthIdx]}…` : "Ask about your taxes…"}
-                            rows={1}
-                            style={{
-                                flex: 1, background: 'var(--input-bg)', border: '1px solid var(--glass-border)',
-                                borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'var(--text-main)', fontSize: '16px',
-                                resize: 'none', outline: 'none', lineHeight: 1.5, maxHeight: '100px', overflowY: 'auto',
-                            }}
-                        />
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {previewImage && (
+                                <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+                                    <img src={previewImage} alt="preview" style={{ height: '2.5rem', borderRadius: '0.4rem', border: '1px solid var(--primary)', opacity: 0.8 }} />
+                                    <button 
+                                        onClick={() => setPreviewImage(null)}
+                                        style={{ position: 'absolute', top: '-0.3rem', right: '-0.3rem', background: 'var(--error)', border: 'none', borderRadius: '50%', width: '1rem', height: '1rem', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '8px' }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            )}
+                            <textarea
+                                ref={inputRef}
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder={pendingPayslip?.awaitingMonth ? "Which month is this payslip for?" : (pendingPayslip && pendingPayslip.monthIdx !== null) ? `Type 'yes' to update ${MONTHS[pendingPayslip.monthIdx]}…` : "Ask about your taxes…"}
+                                rows={1}
+                                style={{
+                                    width: '100%', background: 'var(--input-bg)', border: '1px solid var(--glass-border)',
+                                    borderRadius: '0.75rem', padding: '0.6rem 0.9rem', color: 'var(--text-main)', fontSize: '16px',
+                                    resize: 'none', outline: 'none', lineHeight: 1.5, maxHeight: '100px', overflowY: 'auto',
+                                }}
+                            />
+                        </div>
                         <button
                             onClick={() => sendMessage()}
                             disabled={!input.trim() || isLoading}

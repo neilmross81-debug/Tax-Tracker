@@ -168,6 +168,29 @@ function App() {
     mileageLogs: []
   }), []);
 
+  const resetAllStates = useCallback(() => {
+    const fresh = DEFAULT_PROFILE();
+    setTaxCode(fresh.taxCode);
+    setBaseSalary(fresh.baseSalary);
+    setContractedHours(fresh.contractedHours);
+    setPensionPercent(fresh.pensionPercent);
+    setPensionType(fresh.pensionType);
+    setHolidaySupplementPercent(fresh.holidaySupplementPercent);
+    setStudentLoanPlans(fresh.studentLoanPlans);
+    setChildBenefitCount(fresh.childBenefitCount);
+    setBaseEnhancements(fresh.baseEnhancements);
+    setBaseSacrifices(fresh.baseSacrifices);
+    setGeminiApiKey(fresh.geminiApiKey);
+    setMonths(fresh.months);
+    setWorkMode(fresh.workMode);
+    setSEData(fresh.seData);
+    setHasCompletedTour(true);
+    setIsPremium(true);
+    setLeaseConfig(fresh.leaseConfig);
+    setMileageLogs(fresh.mileageLogs);
+    setProfiles({});
+  }, [DEFAULT_PROFILE]);
+
   const applyProfile = useCallback((prof) => {
     setTaxCode(prof.taxCode || '1257L');
     setBaseSalary(prof.baseSalary || 45000);
@@ -210,10 +233,12 @@ function App() {
     const unsub = onAuthStateChanged(auth, async (user) => {
       console.log(`[BOOT: AUTH_EVENT] User: ${user ? user.uid : 'Logged Out'}`);
       
-      if (isBootingRef.current && isLoaded) {
-        console.log("[BOOT: SKIP] App already loaded, ignoring redundant event.");
+      // Allow re-auth if user changed or if we were in guest mode
+      if (isLoaded && user?.uid === currentUser?.uid) {
+        console.log("[BOOT: SKIP] Same user, ignoring redundant event.");
         return;
       }
+      
       isBootingRef.current = true;
 
       if (user) {
@@ -267,7 +292,28 @@ function App() {
     });
 
     return () => unsub();
-  }, [DEFAULT_PROFILE, applyProfile, isLoaded]);
+  }, [DEFAULT_PROFILE, applyProfile, isLoaded, currentUser?.uid]); 
+
+  const handleLogout = async () => {
+    try {
+      // 1. Immediately block any further saves
+      setIsLoaded(false); 
+      setCurrentUser(null);
+      
+      // 2. Sign out of Firebase
+      await signOut(auth);
+      
+      // 3. Clear all local state
+      resetAllStates();
+      localStorage.clear();
+      
+      // 4. Force reload for a perfectly clean slate
+      window.location.href = window.location.origin; 
+    } catch (e) {
+      console.error("Logout error", e);
+      window.location.reload();
+    }
+  };
 
   // Switch Year State
   const [sourceYearForCopy, setSourceYearForCopy] = useState('2024/25');
@@ -281,24 +327,56 @@ function App() {
 
 
   // Cloud save - debounced on any data change
+  const lastSavedHashRef = useRef('');
   useEffect(() => {
     if (!isLoaded || !currentUser) return;
-    const updatedProfiles = {
-      ...profiles,
-      [taxYear]: {
+
+    const timeoutIdx = setTimeout(async () => {
+      const activeData = {
         taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent,
         taxYear, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months,
         workMode, seData, hasCompletedTour, leaseConfig, mileageLogs
+      };
+
+      // Simple hash check to prevent redundant saves (and loops)
+      const dataString = JSON.stringify(activeData);
+      if (dataString === lastSavedHashRef.current) return;
+      lastSavedHashRef.current = dataString;
+
+      console.log(`[CLOUD_SAVE] Saving data for ${taxYear}...`);
+      
+      // Update local storage first (immediate feedback/backup)
+      localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify({
+        ...profiles,
+        [taxYear]: activeData
+      }));
+      localStorage.setItem('taxTracker_activeYear', taxYear);
+
+      // Save to Firestore
+      try {
+        const docRef = doc(db, 'users', currentUser.uid);
+        await setDoc(docRef, { 
+          profiles: {
+            ...profiles,
+            [taxYear]: activeData
+          }, 
+          activeTaxYear: taxYear 
+        }, { merge: true });
+        
+        // Update local profiles list without triggering this effect again
+        // We do NOT call setProfiles here because it might trigger other reactions
+        // Instead, the next time profiles is used (like switching years), it will be stale
+        // so we actually should update it, but let's be careful about the loop.
+        // Actually, profiles is only used in switchYear and in the save call itself.
+        // Let's update it but it's not a dependency of this effect.
+        setProfiles(prev => ({ ...prev, [taxYear]: activeData }));
+      } catch (e) {
+        console.error("[CLOUD_SAVE_ERROR]", e);
       }
-    };
-    setProfiles(updatedProfiles);
-    // Save to Firestore
-    const docRef = doc(db, 'users', currentUser.uid);
-    setDoc(docRef, { profiles: updatedProfiles, activeTaxYear: taxYear }, { merge: true });
-    // Also keep localStorage as offline backup
-    localStorage.setItem('taxTrackerDataV14_Profiles', JSON.stringify(updatedProfiles));
-    localStorage.setItem('taxTracker_activeYear', taxYear);
-  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded, currentUser, profiles, taxYear, leaseConfig, mileageLogs]);
+    }, 2000); // 2s debounce for stability
+
+    return () => clearTimeout(timeoutIdx);
+  }, [taxCode, baseSalary, contractedHours, pensionPercent, pensionType, holidaySupplementPercent, studentLoanPlans, childBenefitCount, baseEnhancements, baseSacrifices, geminiApiKey, months, workMode, seData, hasCompletedTour, isLoaded, currentUser, taxYear, leaseConfig, mileageLogs, profiles]);
 
   // Switch Year Handler
   const handleYearSwitch = (newYear) => {
@@ -552,7 +630,7 @@ function App() {
     const totalMonthlyTaxPot = Math.max(0, seMonthlyTaxPot + payeMonthlyShortfall);
 
     // Marriage Allowance
-    const isMarriageAllowanceLikely = (currentProjected.gross + seProfitAmt) > 12570 && (currentProjected.gross + seProfitAmt) < 50270;
+    // isMarriageAllowanceLikely removed as it was unused and causing lint errors
 
     const isCodeMismatch = taxCode.toUpperCase().trim() !== recommendedCode.toUpperCase().trim();
 
@@ -568,9 +646,9 @@ function App() {
       sacrificeItemsSavings,
       payeUnderpayment,
       totalMonthlyTaxPot,
-      isMarriageAllowanceLikely,
+      isMarriageAllowanceLikely: (currentProjected.gross + seProfitAmt) > 12570 && (currentProjected.gross + seProfitAmt) < 50270,
       isCodeMismatch,
-      recommendedCode: recommendedCode,
+      recommendedCode,
       savings: {
         tax: taxSaved,
         ni: niSaved,
@@ -904,10 +982,51 @@ function App() {
     return true;
   }).sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Tax Recommendation
-  const recommendedCode = recommendTaxCode(projection.taxableIncome);
-  const isCodeCorrect = taxCode.toUpperCase().trim() === recommendedCode.toUpperCase().trim();
+  // Tax Recommendation (Using analyticsData.recommendedCode now)
   const trapAdvice = getTaxTrapAdvice(projection.taxableIncome, pensionPercent, baseSalary, taxCode);
+
+  // AI Action Bridge - Central dispatcher for LLM triggered actions
+  useEffect(() => {
+    window.handleAiAction = (action, params) => {
+      console.log("AI Action Triggered:", action, params);
+      switch (action) {
+        case 'switch_tab':
+          if (params.tab) setActiveTab(params.tab);
+          return { success: true, message: `Switched to ${params.tab}` };
+
+        case 'log_overtime': {
+          const { hours, multiplier, monthIdx, reason, date } = params;
+          const newMonths = [...months];
+          const targetMonth = monthIdx !== undefined ? monthIdx : selectedMonthIdx;
+          const newItem = {
+            id: Date.now(),
+            date: date || new Date().toISOString().split('T')[0],
+            reason: reason || 'AI Logged',
+            hours: Number(hours) || 0,
+            multiplier: Number(multiplier) || 1.5,
+            claimed: false,
+            monthIdx: targetMonth
+          };
+          newMonths[targetMonth].overtime = [newItem, ...newMonths[targetMonth].overtime];
+          setMonths(newMonths);
+          return { success: true, message: `Logged ${hours}h @ ${multiplier}x in ${MONTHS[targetMonth]}` };
+        }
+
+        case 'update_base_salary':
+          if (params.amount) setBaseSalary(Number(params.amount));
+          if (params.contractedHours) setContractedHours(Number(params.contractedHours));
+          return { success: true, message: `Updated salary to £${params.amount}` };
+
+        case 'update_tax_code':
+          if (params.code) setTaxCode(params.code.toUpperCase());
+          return { success: true, message: `Updated tax code to ${params.code}` };
+
+        default:
+          return { success: false, message: `Unknown action: ${action}` };
+      }
+    };
+    return () => { delete window.handleAiAction; };
+  }, [months, selectedMonthIdx, taxCode]);
 
   // --- Handlers ---
 
@@ -1099,7 +1218,7 @@ function App() {
             letterSpacing: '-0.5px',
             fontWeight: 800
           }}>
-            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.6</span>
+            TaxTracker <span style={{ fontSize: '0.8rem', letterSpacing: 'normal', fontWeight: 'normal', opacity: 0.6, WebkitTextFillColor: 'initial', color: 'var(--text-main)', verticalAlign: 'middle', marginLeft: '0.2rem' }}>v1.1.7</span>
             {isPremium && <span style={{ marginLeft: '0.6rem', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', WebkitTextFillColor: 'white', fontSize: '0.6rem', padding: '0.15rem 0.5rem', borderRadius: '2rem', verticalAlign: 'middle', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', boxShadow: '0 4px 10px rgba(99, 102, 241, 0.4)' }}>Pro</span>}
           </h1>
         </div>
@@ -1336,7 +1455,7 @@ function App() {
                           <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--warning)' }}>£{analyticsData.totalMonthlyTaxPot.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                         </div>
                         <div style={{ fontSize: '0.8rem', opacity: 0.8, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '1rem' }}>
-                          <div style={{ marginBottom: '0.25rem' }}>Safe-to-Spend: <span style={{ color: 'var(--success)', fontWeight: 600 }}>£{((analyticsData.projections.annualTakeHome / 12) + (analyticsData.seProfit / 12) - analyticsData.totalMonthlyTaxPot).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span> /mo</div>
+                          <div style={{ marginBottom: '0.25rem' }}>Safe-to-Spend: <span style={{ color: 'var(--success)', fontWeight: 600 }}>£{(totalMonthlyNet + (analyticsData.seProfit / 12) - analyticsData.totalMonthlyTaxPot).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span> /mo</div>
                           <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Covers SE tax & PAYE shortfalls</div>
                         </div>
                       </div>
@@ -1446,18 +1565,12 @@ function App() {
               <div style={{ marginBottom: '1.25rem' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Statutory Deductions</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                  <span style={{ opacity: 0.75 }}>Taxable Income</span>
-                  <span style={{ fontWeight: 600 }}>£{analyticsData.projections.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ opacity: 0.75 }}>Income Tax</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults?.incomeTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
-                {workMode !== 'paye' && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
-                    <span style={{ opacity: 0.75 }}>Self-Employed Profit</span>
-                    <span style={{ fontWeight: 600, color: 'var(--success)' }}>+£{analyticsData.seProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                  <strong>Annual Take-Home</strong>
-                  <strong style={{ color: 'var(--primary)' }}>£{analyticsData.totalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
+                  <span style={{ opacity: 0.75 }}>National Insurance</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults?.ni.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {pensionType !== 'salary_sacrifice' && monthlyPension > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
@@ -1465,16 +1578,16 @@ function App() {
                     <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                {monthlyResultsAnnualized.studentLoan > 0 && (
+                {currentMonthFull.monthlyResults?.studentLoan > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>Student Loan</span>
-                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.studentLoan / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults.studentLoan.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                {monthlyResultsAnnualized.hicbc > 0 && (
+                {currentMonthFull.monthlyResults?.hicbc > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>HICBC (Child Benefit)</span>
-                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.hicbc / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults.hicbc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
               </div>
@@ -1498,10 +1611,18 @@ function App() {
                 </div>
               )}
 
+              {/* TOTAL TAKE HOME */}
+              <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.75rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '1rem' }}>Net Take-Home</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: 'var(--primary)' }}>£{currentMonthFull.monthlyTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
               {/* MONTHLY VARIABLE ITEMS INPUT */}
-              <div style={{ marginBottom: '1rem' }}>
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1rem' }}>
                 <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span>Monthly Variables</span>
+                  <span>Custom Adjustments (This Month Only)</span>
                   <button className="btn-add" onClick={() => addMonthItem(selectedMonthIdx, 'deductions')} title="Add Variable Item">
                     <Plus size={16} />
                   </button>
@@ -1592,42 +1713,7 @@ function App() {
 
 
 
-            <div className="glass-card">
-              <h2 style={{ margin: 0 }}>Annual Forecast</h2>
-              <div className="stat-value" style={{ color: 'var(--success)', fontSize: '2.2rem' }}>£{projection.finalTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem', opacity: 0.7 }}>
-                <div><div className="stat-label">Taxable Income</div>£{projection.taxableIncome.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div><div className="stat-label">Total Tax/NI</div>£{(projection.incomeTax + projection.ni).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                {projection.studentLoan > 0 && (
-                  <div><div className="stat-label">Student Loan</div>£{projection.studentLoan.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                )}
-                {projection.hicbc > 0 && (
-                  <div><div className="stat-label">HICBC Charge</div>£{projection.hicbc.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                )}
-              </div>
-              <hr style={{ opacity: 0.1, margin: '1.5rem 0' }} />
-
-              <div style={{ marginTop: '1rem' }}>
-                <div className="stat-label">Current Tax Code</div>
-                <div style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                  <span style={{ color: isCodeCorrect ? 'var(--text-main)' : 'var(--error)', fontWeight: 'bold' }}>{taxCode}</span>
-                  {!isCodeCorrect && <span style={{ fontSize: '0.8rem', opacity: 0.6 }}>→ Recommended: {recommendedCode}</span>}
-                </div>
-                {!isCodeCorrect && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--error)', margin: '0 0 0.5rem 0' }}>Your local tax code differs from HMRC recommendations for your projected Adjusted Net Income.</p>
-                    <a
-                      href="https://www.gov.uk/tax-codes/how-to-update-your-tax-code"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                    >
-                      <ExternalLink size={12} /> How to update your tax code (GOV.UK)
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* Annual Forecast removed from Monthly Summary per user request */}
           </div>
         )}
 
@@ -2059,7 +2145,7 @@ function App() {
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{currentUser?.email}</span>
             <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
             <button
-              onClick={() => signOut(auth)}
+              onClick={handleLogout}
               title="Sign Out"
               style={{
                 background: 'transparent',
@@ -2106,47 +2192,7 @@ function App() {
         </div>
       </nav>
 
-      {/* AI Action Bridge - Central dispatcher for LLM triggered actions */}
-      {(() => {
-        window.handleAiAction = (action, params) => {
-          console.log("AI Action Triggered:", action, params);
-          switch (action) {
-            case 'switch_tab':
-              if (params.tab) setActiveTab(params.tab);
-              return { success: true, message: `Switched to ${params.tab}` };
-
-            case 'log_overtime': {
-              const { hours, multiplier, monthIdx, reason, date } = params;
-              const newMonths = [...months];
-              const targetMonth = monthIdx !== undefined ? monthIdx : selectedMonthIdx;
-              const newItem = {
-                id: Date.now(),
-                date: date || new Date().toISOString().split('T')[0],
-                reason: reason || 'AI Logged',
-                hours: Number(hours) || 0,
-                multiplier: Number(multiplier) || 1.5,
-                claimed: false,
-                monthIdx: targetMonth
-              };
-              newMonths[targetMonth].overtime = [newItem, ...newMonths[targetMonth].overtime];
-              setMonths(newMonths);
-              return { success: true, message: `Logged ${hours}h @ ${multiplier}x in ${MONTHS[targetMonth]}` };
-            }
-
-            case 'update_base_salary':
-              if (params.amount) setBaseSalary(Number(params.amount));
-              if (params.contractedHours) setContractedHours(Number(params.contractedHours));
-              return { success: true, message: `Updated salary to £${params.amount}` };
-
-            case 'update_tax_code':
-              if (params.code) setTaxCode(params.code.toUpperCase());
-              return { success: true, message: `Updated tax code to ${params.code}` };
-
-            default:
-              return { success: false, message: `Unknown action: ${action}` };
-          }
-        };
-      })()}
+      {/* AI Action Bridge - Handled in useEffect */}
 
       {
         showBaseModifierModal && (

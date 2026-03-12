@@ -291,7 +291,10 @@ function App() {
       clearTimeout(rescueTimer);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      clearTimeout(rescueTimer);
+    };
   }, [DEFAULT_PROFILE, applyProfile, isLoaded, currentUser?.uid]); 
 
   const handleLogout = async () => {
@@ -1566,11 +1569,11 @@ function App() {
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.45, textTransform: 'uppercase', marginBottom: '0.6rem' }}>Statutory Deductions</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                   <span style={{ opacity: 0.75 }}>Income Tax</span>
-                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults?.incomeTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.incomeTax / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                   <span style={{ opacity: 0.75 }}>National Insurance</span>
-                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults?.ni.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.ni / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 {pensionType !== 'salary_sacrifice' && monthlyPension > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
@@ -1578,16 +1581,16 @@ function App() {
                     <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{monthlyPension.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                {currentMonthFull.monthlyResults?.studentLoan > 0 && (
+                {monthlyResultsAnnualized.studentLoan > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>Student Loan</span>
-                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults.studentLoan.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.studentLoan / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
-                {currentMonthFull.monthlyResults?.hicbc > 0 && (
+                {monthlyResultsAnnualized.hicbc > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.4rem' }}>
                     <span style={{ opacity: 0.75 }}>HICBC (Child Benefit)</span>
-                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{currentMonthFull.monthlyResults.hicbc.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span style={{ color: 'var(--error)', fontWeight: 500 }}>-£{(monthlyResultsAnnualized.hicbc / 12).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 )}
               </div>
@@ -1615,7 +1618,7 @@ function App() {
               <div style={{ padding: '1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '0.75rem', marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: 700, fontSize: '1rem' }}>Net Take-Home</span>
-                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: 'var(--primary)' }}>£{currentMonthFull.monthlyTakeHome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ fontWeight: 800, fontSize: '1.4rem', color: 'var(--primary)' }}>£{totalMonthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
 
